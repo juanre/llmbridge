@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llmbridge"
+version = "0.1.0"
+description = "LLM model management service with intelligent discovery, pricing, and database management"
+readme = "README.md"
+authors = [
+    { name = "Juan Reyero", email = "juan@juanreyero.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.18.0",
+    "openai>=1.0.0",
+    "google-genai>=0.1.0",
+    "httpx>=0.24.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "aiohttp>=3.11.18",
+    "ollama>=0.4.8",
+    "psycopg2-binary>=2.9.0",
+    "beautifulsoup4>=4.13.4",
+    "claude-code-sdk>=0.0.10",
+    "pgdbm",
+]
+
+[project.scripts]
+llm-models = "llm.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-mock>=3.10",
+    "black>=23.0",
+    "isort>=5.0",
+    "pyright>=1.1",
+]
+
+[dependency-groups]
+dev = [
+    "black>=25.1.0",
+    "claude-code-sdk>=0.0.10",
+    "pdf2image>=1.17.0",
+    "pillow>=11.2.1",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "reportlab>=4.4.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src" = ""
+
+[tool.hatch.build]
+include = [
+    "src/llm/**/*.py",
+    "src/llm/**/*.sql",
+    "src/llm/migrations/*.sql",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "llm: marks tests as LLM-related",
+    "unit: marks tests as unit tests",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow",
+    "db: marks tests as requiring database",
+    "google: marks tests as Google-specific",
+    "ollama: marks tests as Ollama-specific",
+]
+
+[tool.uv.sources]
+pgdbm = { path = "../pgdbm" }
+
