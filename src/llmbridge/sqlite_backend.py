@@ -2,6 +2,7 @@
 
 import aiosqlite
 import json
+import sqlite3
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from decimal import Decimal
@@ -9,6 +10,19 @@ from uuid import UUID, uuid4
 from pathlib import Path
 
 from .database_backends import DatabaseBackend
+
+# Configure datetime adapter for Python 3.12+
+def adapt_datetime(val):
+    """Adapt datetime to ISO 8601 string."""
+    return val.isoformat()
+
+def convert_datetime(val):
+    """Convert ISO 8601 string to datetime."""
+    return datetime.fromisoformat(val.decode())
+
+# Register the adapters
+sqlite3.register_adapter(datetime, adapt_datetime)
+sqlite3.register_converter("TIMESTAMP", convert_datetime)
 
 
 class SQLiteBackend(DatabaseBackend):
@@ -25,7 +39,11 @@ class SQLiteBackend(DatabaseBackend):
 
     async def initialize(self) -> None:
         """Initialize the database connection and create tables if needed."""
-        self.conn = await aiosqlite.connect(self.db_path)
+        # Enable parse_decltypes to use our custom converters
+        self.conn = await aiosqlite.connect(
+            self.db_path,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        )
         self.conn.row_factory = aiosqlite.Row
         
         # Enable foreign keys
