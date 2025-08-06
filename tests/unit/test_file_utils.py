@@ -97,9 +97,9 @@ class TestImageValidation:
     def test_validate_image_file_with_mock(self):
         """Test image validation with mocked files."""
         # Mock os.path.exists to return True
-        with patch("llm.file_utils.os.path.exists", return_value=True):
+        with patch("llmbridge.file_utils.os.path.exists", return_value=True):
             # Mock get_file_mime_type for different types
-            with patch("llm.file_utils.get_file_mime_type") as mock_mime:
+            with patch("llmbridge.file_utils.get_file_mime_type") as mock_mime:
                 # Test valid image types
                 mock_mime.return_value = "image/png"
                 assert validate_image_file("test.png") is True
@@ -146,8 +146,8 @@ class TestImageContentCreation:
         ]
         assert result == expected
 
-    @patch("llm.file_utils.validate_file_for_vision_api")
-    @patch("llm.file_utils.create_data_url")
+    @patch("llmbridge.file_utils.validate_file_for_vision_api")
+    @patch("llmbridge.file_utils.create_data_url")
     def test_create_image_content_with_file_path(
         self, mock_create_data_url, mock_validate
     ):
@@ -423,8 +423,8 @@ class TestEnhancedConvenienceFunctions:
         ]
         assert result == expected
 
-    @patch("llm.file_utils.validate_file_for_vision_api")
-    @patch("llm.file_utils.create_data_url")
+    @patch("llmbridge.file_utils.validate_file_for_vision_api")
+    @patch("llmbridge.file_utils.create_data_url")
     def test_compare_images_with_mixed_sources(
         self, mock_create_data_url, mock_validate
     ):
@@ -457,7 +457,7 @@ class TestEnhancedConvenienceFunctions:
 class TestPDFValidation:
     """Test PDF validation functionality."""
 
-    @patch("llm.file_utils.get_file_mime_type")
+    @patch("llmbridge.file_utils.get_file_mime_type")
     @patch("os.path.exists")
     def test_is_pdf_file_true(self, mock_exists, mock_get_mime):
         """Test PDF file detection."""
@@ -467,7 +467,7 @@ class TestPDFValidation:
         result = is_pdf_file("test.pdf")
         assert result is True
 
-    @patch("llm.file_utils.get_file_mime_type")
+    @patch("llmbridge.file_utils.get_file_mime_type")
     @patch("os.path.exists")
     def test_is_pdf_file_false(self, mock_exists, mock_get_mime):
         """Test non-PDF file detection."""
@@ -486,7 +486,7 @@ class TestPDFValidation:
 class TestVisionAPIValidation:
     """Test vision API file validation."""
 
-    @patch("llm.file_utils.get_file_mime_type")
+    @patch("llmbridge.file_utils.get_file_mime_type")
     @patch("os.path.exists")
     def test_validate_pdf_file_raises_error(self, mock_exists, mock_get_mime):
         """Test that PDF files raise appropriate error."""
@@ -501,7 +501,7 @@ class TestVisionAPIValidation:
         assert "OpenAI Chat Completions API" in error_msg
         assert "Assistants API" in error_msg
 
-    @patch("llm.file_utils.get_file_mime_type")
+    @patch("llmbridge.file_utils.get_file_mime_type")
     @patch("os.path.exists")
     def test_validate_unsupported_file_type(self, mock_exists, mock_get_mime):
         """Test that unsupported file types raise appropriate error."""
@@ -516,7 +516,7 @@ class TestVisionAPIValidation:
         assert "text/plain" in error_msg
         assert "Supported image types:" in error_msg
 
-    @patch("llm.file_utils.get_file_mime_type")
+    @patch("llmbridge.file_utils.get_file_mime_type")
     @patch("os.path.exists")
     def test_validate_supported_image_file(self, mock_exists, mock_get_mime):
         """Test that supported image files pass validation."""

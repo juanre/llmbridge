@@ -112,7 +112,7 @@ llm-models suggest deepest_model --provider google
 ### Programmatic Access
 
 ```python
-from llm.model_refresh.json_model_loader import JSONModelLoader
+from llmbridge.model_refresh.json_model_loader import JSONModelLoader
 
 # Load usage hints
 loader = JSONModelLoader("data/models")

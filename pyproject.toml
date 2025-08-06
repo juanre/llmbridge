@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
-llm-models = "llm.cli:main"
+llm-models = "llmbridge.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -51,16 +51,16 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm"]
+packages = ["src/llmbridge"]
 
 [tool.hatch.build.targets.wheel.sources]
 "src" = ""
 
 [tool.hatch.build]
 include = [
-    "src/llm/**/*.py",
-    "src/llm/**/*.sql",
-    "src/llm/migrations/*.sql",
+    "src/llmbridbge/**/*.py",
+    "src/llmbridbge/**/*.sql",
+    "src/llmbridbge/migrations/*.sql",
 ]
 
 [tool.pytest.ini_options]

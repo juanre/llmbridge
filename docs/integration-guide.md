@@ -38,7 +38,7 @@ pip install -e /path/to/llmbridge
 In standalone mode, llmbridge creates and manages its own database connection pool:
 
 ```python
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 # Create service with its own connection pool
 service = LLMBridge(
@@ -132,7 +132,7 @@ Share a single AsyncDatabaseManager instance across all services:
 
 ```python
 from pgdbm_utils import AsyncDatabaseManager, DatabaseConfig
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 # 1. Create a shared database manager
 config = DatabaseConfig(
@@ -168,7 +168,7 @@ Here's a complete example of integrating llmbridge into task-engine:
 # task-engine/src/providers/service_factory.py
 
 from core.db import TaskEngineDb
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 class ServiceFactory:
     """Factory for creating services with shared database connections."""
@@ -222,7 +222,7 @@ async def main():
 For cleaner code, use the `from_manager` class method:
 
 ```python
-from llm.db import LLMDatabase
+from llmbridge.db import LLMDatabase
 
 # Method 1: Direct usage
 service = LLMBridge(
@@ -246,7 +246,7 @@ For unit tests, create isolated test databases:
 
 ```python
 import pytest
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 @pytest.fixture
 async def llmbridge():
@@ -458,7 +458,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pgdbm_utils import AsyncDatabaseManager, DatabaseConfig
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 logger = logging.getLogger(__name__)
 
@@ -497,8 +497,8 @@ class Application:
             logger.info("Database disconnected")
 
     async def process_request(self, user_prompt: str, user_id: str):
-        """Process a user request with LLM."""
-        from llm.schemas import LLMRequest, Message
+        """Process a user request with LLMBRIDGE."""
+        from llmbridge.schemas import LLMRequest, Message
 
         request = LLMRequest(
             messages=[

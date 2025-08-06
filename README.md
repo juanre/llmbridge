@@ -42,8 +42,8 @@ uv pip install -e .
 
 ```python
 import asyncio
-from llm.service import LLMBridge
-from llm.schemas import LLMRequest, Message
+from llmbridge.service import LLMBridge
+from llmbridge.schemas import LLMRequest, Message
 
 async def main():
     # Initialize service (will auto-detect providers from environment variables)
@@ -70,8 +70,8 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from llm.service import LLMBridge
-from llm.schemas import LLMRequest, Message
+from llmbridge.service import LLMBridge
+from llmbridge.schemas import LLMRequest, Message
 
 async def main():
     # Initialize with database tracking
@@ -210,7 +210,7 @@ export GOOGLE_API_KEY=...  # or GEMINI_API_KEY
 ### Manual Provider Registration
 
 ```python
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 service = LLMBridge(enable_db_logging=False)
 
@@ -254,7 +254,7 @@ The service uses PostgreSQL with async-db-utils for high-performance database op
 ### Database Setup
 
 ```python
-from llm.service import LLMBridge
+from llmbridge.service import LLMBridge
 
 # Automatic setup (recommended)
 service = LLMBridge(
@@ -280,7 +280,7 @@ service = LLMBridge(
 ### System Messages
 
 ```python
-from llm.schemas import LLMRequest, Message
+from llmbridge.schemas import LLMRequest, Message
 
 request = LLMRequest(
     messages=[

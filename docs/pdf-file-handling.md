@@ -84,8 +84,8 @@ types.Part(
 ### Simple PDF Analysis
 
 ```python
-from llm.file_utils import analyze_file
-from llm.providers.openai_api import OpenAIProvider
+from llmbridge.file_utils import analyze_file
+from llmbridge.providers.openai_api import OpenAIProvider
 
 # Works the same across all providers
 content = analyze_file("document.pdf", "Extract key information")
@@ -101,9 +101,9 @@ response = await provider.chat(
 ### Using the Service Layer
 
 ```python
-from llm.service import LLMBridge
-from llm.schemas import LLMRequest, Message
-from llm.file_utils import analyze_file
+from llmbridge.service import LLMBridge
+from llmbridge.schemas import LLMRequest, Message
+from llmbridge.file_utils import analyze_file
 
 service = LLMBridge()
 

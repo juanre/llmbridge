@@ -2,8 +2,8 @@
 
 ## Setup
 ```python
-from llm.api import LLMBridgeAPI
-from llm.db import LLMDatabase
+from llmbridge.api import LLMBridgeAPI
+from llmbridge.db import LLMDatabase
 
 db = LLMDatabase(connection_string)
 await db.initialize()
@@ -83,7 +83,7 @@ large_context = await api.find_models_by_context_size(
 results = await api.search_models("gpt")
 
 # By requirements
-from llm.api.types import ModelRequirements
+from llmbridge.api.types import ModelRequirements
 
 reqs = ModelRequirements(
     min_context_size=50000,
