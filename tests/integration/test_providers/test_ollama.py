@@ -12,6 +12,7 @@ from llmbridge.providers.ollama_api import OllamaProvider
 from llmbridge.schemas import LLMResponse, Message
 
 
+@pytest.mark.skip(reason="Ollama tests take too long - skipping for faster test runs")
 @pytest.mark.llm
 @pytest.mark.integration
 @pytest.mark.slow

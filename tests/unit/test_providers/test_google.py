@@ -6,10 +6,29 @@ Tests are minimal to avoid excessive API usage costs.
 
 import json
 import os
+from functools import wraps
 
 import pytest
 from llmbridge.providers.google_api import GoogleProvider
 from llmbridge.schemas import LLMResponse, Message
+
+
+def skip_on_quota_exceeded(func):
+    """Decorator to skip tests when Google API quota is exceeded."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Check for quota/rate limit errors
+            if any(term in error_msg for term in [
+                "quota", "rate limit", "resource_exhausted", 
+                "429", "billing", "exceeded"
+            ]):
+                pytest.skip(f"Google API quota exceeded: {str(e)[:100]}")
+            raise
+    return wrapper
 
 
 @pytest.mark.llm
@@ -73,6 +92,7 @@ class TestGoogleProviderUnit:
         assert google_provider.validate_model("google:invalid-model") is False
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_basic_request(self, google_provider, simple_user_message):
         """Test basic chat functionality with minimal token usage."""
         response = await google_provider.chat(
@@ -92,6 +112,7 @@ class TestGoogleProviderUnit:
         assert response.finish_reason == "stop"
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_system_message(
         self, google_provider, system_user_messages
     ):
@@ -105,6 +126,7 @@ class TestGoogleProviderUnit:
         assert "4" in response.content or "four" in response.content.lower()
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_provider_prefix_removal(
         self, google_provider, simple_user_message
     ):
@@ -117,6 +139,7 @@ class TestGoogleProviderUnit:
         assert response.model == "gemini-1.5-pro"  # Prefix should be removed
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_parameters(self, google_provider, simple_user_message):
         """Test chat with temperature and max_tokens parameters."""
         response = await google_provider.chat(
@@ -166,6 +189,7 @@ class TestGoogleProviderUnit:
         assert 5 < count < 50
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_multi_turn_conversation(
         self, google_provider, multi_turn_conversation
     ):
@@ -180,6 +204,7 @@ class TestGoogleProviderUnit:
         assert "alice" in response.content.lower()
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_image_content(self, google_provider):
         """Test chat with image content (text-only for unit tests)."""
         # For unit tests, we'll just test text content
@@ -195,6 +220,7 @@ class TestGoogleProviderUnit:
         assert len(response.content) > 0
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_response_without_usage_metadata(
         self, google_provider, simple_user_message
     ):
@@ -217,6 +243,7 @@ class TestGoogleProviderUnit:
         assert default_model in google_provider.get_supported_models()
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_json_response_format(self, google_provider, json_response_format):
         """Test JSON response format."""
         messages = [

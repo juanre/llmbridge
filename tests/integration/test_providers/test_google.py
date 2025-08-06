@@ -5,10 +5,29 @@ These tests require a valid GOOGLE_API_KEY or GEMINI_API_KEY environment variabl
 
 import asyncio
 import os
+from functools import wraps
 
 import pytest
 from llmbridge.providers.google_api import GoogleProvider
 from llmbridge.schemas import LLMResponse, Message
+
+
+def skip_on_quota_exceeded(func):
+    """Decorator to skip tests when Google API quota is exceeded."""
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Check for quota/rate limit errors
+            if any(term in error_msg for term in [
+                "quota", "rate limit", "resource_exhausted", 
+                "429", "billing", "exceeded"
+            ]):
+                pytest.skip(f"Google API quota exceeded: {str(e)[:100]}")
+            raise
+    return wrapper
 
 
 @pytest.mark.llm
@@ -28,6 +47,7 @@ class TestGoogleProviderIntegration:
         return GoogleProvider(api_key=api_key)
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_simple_chat(self, provider):
         """Test simple chat with Gemini."""
         messages = [Message(role="user", content="Say exactly 'Hello from Gemini!'")]
@@ -48,6 +68,7 @@ class TestGoogleProviderIntegration:
             assert response.usage["completion_tokens"] > 0
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_system_message(self, provider):
         """Test chat with system message."""
         messages = [
@@ -67,6 +88,7 @@ class TestGoogleProviderIntegration:
         assert len(response.content) > 10  # Should be encouraging, not just "4"
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_temperature(self, provider):
         """Test chat with different temperature settings."""
         messages = [
@@ -89,6 +111,7 @@ class TestGoogleProviderIntegration:
         assert len(response_high.content) > 0
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_max_tokens(self, provider):
         """Test chat with max_tokens limit."""
         messages = [
@@ -108,6 +131,7 @@ class TestGoogleProviderIntegration:
         assert len(response.content) > 0
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_multi_turn_conversation(self, provider):
         """Test multi-turn conversation."""
         messages = [
@@ -127,6 +151,7 @@ class TestGoogleProviderIntegration:
         assert "Alice" in response.content
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_error_handling_invalid_model(self, provider):
         """Test error handling with invalid model."""
         messages = [Message(role="user", content="Hello")]
@@ -135,6 +160,7 @@ class TestGoogleProviderIntegration:
             await provider.chat(messages=messages, model="invalid-model-name")
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_concurrent_requests(self, provider):
         """Test multiple concurrent requests."""
 
@@ -154,6 +180,7 @@ class TestGoogleProviderIntegration:
             assert len(response.content) > 0
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_model_validation(self, provider):
         """Test model validation methods."""
         # Test valid models
@@ -186,6 +213,7 @@ class TestGoogleProviderIntegration:
         assert count < 100  # Should be reasonable for this short text
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_chat_with_image_content(self, provider):
         """Test chat with image content (vision)."""
         messages = [
@@ -222,6 +250,7 @@ class TestGoogleProviderIntegration:
                 raise
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_long_context_handling(self, provider):
         """Test handling of long context (Gemini has very large context window)."""
         # Create a longer conversation
@@ -250,6 +279,7 @@ class TestGoogleProviderIntegration:
                 raise
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_mathematical_reasoning(self, provider):
         """Test mathematical reasoning capabilities."""
         messages = [
@@ -278,6 +308,7 @@ class TestGoogleProviderIntegration:
                 raise
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_code_generation(self, provider):
         """Test code generation capabilities."""
         messages = [
@@ -307,6 +338,7 @@ class TestGoogleProviderIntegration:
                 raise
 
     @pytest.mark.asyncio
+    @skip_on_quota_exceeded
     async def test_safety_filtering(self, provider):
         """Test that safety filtering works appropriately."""
         messages = [

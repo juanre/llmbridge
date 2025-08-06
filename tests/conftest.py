@@ -148,7 +148,7 @@ async def llm_test_db(test_db_factory):
     from pgdbm import AsyncMigrationManager
 
     migration_manager = AsyncMigrationManager(
-        db_manager, migrations_path="src/llm/migrations", module_name="llmbridge"
+        db_manager, migrations_path="src/llmbridge/migrations", module_name="llmbridge"
     )
     await migration_manager.apply_pending_migrations()
 

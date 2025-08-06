@@ -198,29 +198,39 @@ class TestSimpleFileProcessing:
         if not available_models.get("google"):
             pytest.skip("Google not available")
 
-        content = analyze_image(
-            test_image_path,
-            "Extract the text from this image. Focus on the test ID and name.",
-        )
+        try:
+            content = analyze_image(
+                test_image_path,
+                "Extract the text from this image. Focus on the test ID and name.",
+            )
 
-        request = LLMRequest(
-            messages=[Message(role="user", content=content)],
-            model="gemini-1.5-pro",
-            max_tokens=200,
-        )
+            request = LLMRequest(
+                messages=[Message(role="user", content=content)],
+                model="gemini-1.5-pro",
+                max_tokens=200,
+            )
 
-        response = await service.chat(request)
+            response = await service.chat(request)
 
-        # Verify response
-        assert response.content is not None
-        assert len(response.content) > 0
+            # Verify response
+            assert response.content is not None
+            assert len(response.content) > 0
 
-        # Check if key information was extracted
-        content_lower = response.content.lower()
-        assert "pdf-test-001" in content_lower
-        assert "john doe" in content_lower
+            # Check if key information was extracted
+            content_lower = response.content.lower()
+            assert "pdf-test-001" in content_lower
+            assert "john doe" in content_lower
 
-        print(f"Google extracted: {response.content}")
+            print(f"Google extracted: {response.content}")
+        except Exception as e:
+            error_msg = str(e).lower()
+            # Check for quota/rate limit errors
+            if any(term in error_msg for term in [
+                "quota", "rate limit", "resource_exhausted", 
+                "429", "billing", "exceeded"
+            ]):
+                pytest.skip(f"Google API quota exceeded: {str(e)[:100]}")
+            raise
 
     @pytest.mark.asyncio
     async def test_pdf_processing_universal(self, service, test_pdf_path):
