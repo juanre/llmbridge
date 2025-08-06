@@ -50,15 +50,15 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from llmbridge.service_v2 import LLMBridge
+from llmbridge.service_sqlite import LLMBridgeSQLite
 from llmbridge.schemas import LLMRequest, Message
 
 async def main():
-    # Initialize with SQLite (default)
-    service = LLMBridge()  # Creates/uses llmbridge.db
+    # Initialize with SQLite (default: llmbridge.db)
+    service = LLMBridgeSQLite()
     
     # Or specify a custom SQLite file
-    service = LLMBridge(db_connection_string="my_app.db")
+    service = LLMBridgeSQLite(db_path="my_app.db")
     
     # Make requests - all calls are logged to database
     request = LLMRequest(
@@ -68,7 +68,7 @@ async def main():
     
     response = await service.chat(request)
     print(f"Response: {response.content}")
-    print(f"Cost: ${response.usage.get('cost', 0):.4f}")
+    print(f"Cost: ${response.usage.get('cost', 0):.4f} if tracked")
 
 asyncio.run(main())
 ```
@@ -110,10 +110,10 @@ createdb llmbridge
 ### List Available Models
 
 ```python
-from llmbridge.db_v2 import LLMDatabase
+from llmbridge.db_sqlite import SQLiteDatabase
 
 async def list_models():
-    db = LLMDatabase()  # Uses SQLite by default
+    db = SQLiteDatabase()  # Uses SQLite
     await db.initialize()
     
     # List all active models
@@ -128,7 +128,14 @@ async def list_models():
 
 ```python
 async def get_usage():
-    db = LLMDatabase()
+    # For SQLite
+    from llmbridge.db_sqlite import SQLiteDatabase
+    db = SQLiteDatabase()
+    
+    # For PostgreSQL
+    # from llmbridge.db import LLMDatabase
+    # db = LLMDatabase(connection_string="postgresql://...")
+    
     await db.initialize()
     
     # Get usage for last 30 days

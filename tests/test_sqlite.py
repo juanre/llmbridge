@@ -1,15 +1,13 @@
-"""Tests for SQLite backend implementation."""
+"""Tests for SQLite database implementation."""
 
 import pytest
 import tempfile
 import os
-from pathlib import Path
 from decimal import Decimal
 from uuid import uuid4
 from datetime import datetime, timezone
 
-from llmbridge.db_v2 import LLMDatabase, create_backend
-from llmbridge.sqlite_backend import SQLiteBackend
+from llmbridge.db_sqlite import SQLiteDatabase
 from llmbridge.schemas import LLMModel, CallRecord
 
 
@@ -21,7 +19,7 @@ async def sqlite_db():
         db_path = f.name
     
     # Create database instance
-    db = LLMDatabase(connection_string=f"sqlite:///{db_path}")
+    db = SQLiteDatabase(db_path)
     await db.initialize()
     
     yield db
@@ -31,55 +29,14 @@ async def sqlite_db():
     os.unlink(db_path)
 
 
-@pytest.fixture
-async def postgres_db(llm_test_db):
-    """Create a PostgreSQL database for comparison testing."""
-    db = LLMDatabase(connection_string=llm_test_db["db_url"])
-    await db.initialize()
-    
-    yield db
-    
-    await db.close()
-
-
-class TestBackendFactory:
-    """Test the backend factory function."""
-    
-    def test_create_sqlite_backend_default(self):
-        """Test creating SQLite backend with no connection string."""
-        backend = create_backend(None)
-        assert isinstance(backend, SQLiteBackend)
-        assert backend.db_path == "llmbridge.db"
-    
-    def test_create_sqlite_backend_explicit(self):
-        """Test creating SQLite backend with sqlite:// URL."""
-        backend = create_backend("sqlite:///test.db")
-        assert isinstance(backend, SQLiteBackend)
-        assert backend.db_path == "test.db"
-    
-    def test_create_sqlite_backend_file_path(self):
-        """Test creating SQLite backend with .db file path."""
-        backend = create_backend("mydata.db")
-        assert isinstance(backend, SQLiteBackend)
-        assert backend.db_path == "mydata.db"
-    
-    def test_create_postgres_backend(self):
-        """Test creating PostgreSQL backend."""
-        from llmbridge.postgres_backend import PostgresBackend
-        
-        backend = create_backend("postgresql://user:pass@localhost/db")
-        assert isinstance(backend, PostgresBackend)
-
-
 @pytest.mark.asyncio
-class TestSQLiteBackend:
-    """Test SQLite backend functionality."""
+class TestSQLiteDatabase:
+    """Test SQLite database functionality."""
     
     async def test_initialization(self, sqlite_db):
         """Test that SQLite database initializes correctly."""
         assert sqlite_db._initialized
-        assert sqlite_db.backend is not None
-        assert isinstance(sqlite_db.backend, SQLiteBackend)
+        assert sqlite_db.conn is not None
     
     async def test_default_models_inserted(self, sqlite_db):
         """Test that default models are inserted on initialization."""
@@ -129,46 +86,6 @@ class TestSQLiteBackend:
         anthropic_models = await sqlite_db.list_models(provider="anthropic")
         assert len(anthropic_models) > 0
         assert all(m.provider == "anthropic" for m in anthropic_models)
-    
-    async def test_update_model(self, sqlite_db):
-        """Test updating a model's configuration."""
-        # First get an existing model
-        models = await sqlite_db.list_models()
-        test_model = models[0]
-        
-        # Update it
-        updates = {
-            "description": "Updated description",
-            "max_context": 999999,
-        }
-        
-        success = await sqlite_db.update_model(test_model.id, updates)
-        assert success is True
-        
-        # Verify the update succeeded
-        all_models = await sqlite_db.list_models(provider=test_model.provider, active_only=False)
-        updated_model = next((m for m in all_models if m.id == test_model.id), None)
-        assert updated_model is not None
-        assert updated_model.description == "Updated description"
-        assert updated_model.max_context == 999999
-    
-    async def test_deactivate_model(self, sqlite_db):
-        """Test deactivating a model."""
-        # Get a model
-        models = await sqlite_db.list_models()
-        test_model = models[0]
-        
-        # Deactivate it
-        success = await sqlite_db.deactivate_model(test_model.provider, test_model.model_name)
-        assert success is True
-        
-        # Should not be in active models
-        active_models = await sqlite_db.list_models(provider=test_model.provider)
-        assert test_model.model_name not in [m.model_name for m in active_models]
-        
-        # Should be in all models
-        all_models = await sqlite_db.list_models(provider=test_model.provider, active_only=False)
-        assert test_model.model_name in [m.model_name for m in all_models]
     
     async def test_record_api_call(self, sqlite_db):
         """Test recording an API call."""
@@ -278,36 +195,3 @@ class TestSQLiteBackend:
         page1_ids = {c.id for c in page1}
         page2_ids = {c.id for c in page2}
         assert len(page1_ids.intersection(page2_ids)) == 0
-
-
-@pytest.mark.asyncio
-class TestSQLiteVsPostgreSQL:
-    """Test that SQLite backend produces same results as PostgreSQL."""
-    
-    @pytest.mark.skip(reason="Requires PostgreSQL to be running")
-    async def test_model_operations_parity(self, sqlite_db, postgres_db):
-        """Test that model operations work the same in both backends."""
-        test_model = LLMModel(
-            provider="test",
-            model_name="parity-test",
-            display_name="Parity Test",
-            max_context=2000,
-            supports_vision=True,
-            dollars_per_million_tokens_input=Decimal("2.50"),
-        )
-        
-        # Add to both databases
-        sqlite_id = await sqlite_db.add_model(test_model)
-        postgres_id = await postgres_db.add_model(test_model)
-        
-        assert sqlite_id is not None
-        assert postgres_id is not None
-        
-        # Retrieve from both
-        sqlite_model = await sqlite_db.get_model("test", "parity-test")
-        postgres_model = await postgres_db.get_model("test", "parity-test")
-        
-        assert sqlite_model.provider == postgres_model.provider
-        assert sqlite_model.model_name == postgres_model.model_name
-        assert sqlite_model.max_context == postgres_model.max_context
-        assert sqlite_model.supports_vision == postgres_model.supports_vision

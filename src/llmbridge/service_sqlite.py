@@ -1,5 +1,8 @@
 """
-LLM service that manages providers and routes requests with database backend abstraction.
+LLM service with SQLite support for local development.
+
+This is a simplified alternative to the main service.py for when you want to use SQLite
+instead of PostgreSQL. For production use with pgdbm, use the main service.py.
 """
 
 import logging
@@ -8,12 +11,11 @@ import time
 from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
-from llmbridge.api import LLMBridgeAPI
 from llmbridge.base import BaseLLMProvider
-from llmbridge.db_v2 import LLMDatabase
+from llmbridge.db_sqlite import SQLiteDatabase
 from llmbridge.providers.anthropic_api import AnthropicProvider
 from llmbridge.providers.google_api import GoogleProvider
-from llmbridge.providers.ollama_api import OllamaProvider
+from llmbridge.providers.ollama_api import OllamaProvider  
 from llmbridge.providers.openai_api import OpenAIProvider
 from llmbridge.schemas import LLMRequest, LLMResponse
 
@@ -23,49 +25,32 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class LLMBridge:
-    """LLM service that manages providers and routes requests."""
+class LLMBridgeSQLite:
+    """LLM service with SQLite database for local development."""
 
     def __init__(
         self,
-        db_connection_string: Optional[str] = None,
+        db_path: str = "llmbridge.db",
         origin: str = "llmbridge",
         enable_db_logging: bool = True,
-        use_sqlite: Optional[bool] = None,
     ):
         """
-        Initialize the LLM service.
+        Initialize the LLM service with SQLite database.
 
         Args:
-            db_connection_string: Database connection string.
-                - PostgreSQL: "postgresql://user:pass@host/db"
-                - SQLite: "sqlite:///path/to/db.db" or just "path/to/db.db"
-                - None: Uses SQLite with default "llmbridge.db"
+            db_path: Path to SQLite database file
             origin: Origin identifier for database logging
             enable_db_logging: Whether to enable database logging
-            use_sqlite: Force SQLite usage (deprecated, use connection string instead)
         """
         self.origin = origin
         self.enable_db_logging = enable_db_logging
         self._db_initialized = False
 
-        # Initialize database if enabled
+        # Initialize SQLite database if enabled
         if enable_db_logging:
-            # Handle backward compatibility with use_sqlite parameter
-            if use_sqlite is True and db_connection_string is None:
-                db_connection_string = "llmbridge.db"
-            elif use_sqlite is False and db_connection_string is None:
-                # Use PostgreSQL with default settings
-                db_connection_string = os.getenv(
-                    "DATABASE_URL",
-                    "postgresql://postgres:postgres@localhost/postgres"
-                )
-            
-            self.db = LLMDatabase(connection_string=db_connection_string)
-            self.api = None  # Will be initialized after db is initialized
+            self.db = SQLiteDatabase(db_path)
         else:
             self.db = None
-            self.api = None
 
         self.providers: Dict[str, BaseLLMProvider] = {}
         self._model_cache: Dict[str, Dict[str, Any]] = {}
@@ -75,16 +60,10 @@ class LLMBridge:
         """Ensure database is initialized (async operation)."""
         if self.enable_db_logging and self.db and not self._db_initialized:
             try:
-                logger.info("Initializing LLM service database connection")
+                logger.info("Initializing SQLite database connection")
                 await self.db.initialize()
-                logger.debug("Database connection established")
-
                 self._db_initialized = True
-
-                # Initialize API after database is ready
-                self.api = LLMBridgeAPI(self.db)
-
-                logger.info("LLM service database initialized successfully")
+                logger.info("SQLite database initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize database: {e}", exc_info=True)
                 logger.warning("Database logging will be disabled")
@@ -217,27 +196,32 @@ class LLMBridge:
                     from uuid import uuid4
                     from llmbridge.schemas import CallRecord
 
-                    # Calculate cost if we have pricing info
-                    cost = None
-                    if response.usage and self.api:
-                        model_info = await self.api.get_model(provider_name, model_name)
-                        if model_info:
-                            cost = self.api.calculate_cost(
-                                model_info,
-                                response.usage.get("prompt_tokens", 0),
-                                response.usage.get("completion_tokens", 0),
-                            )
+                    # Get model info for cost calculation
+                    model_info = await self.db.get_model(provider_name, model_name)
+                    
+                    # Calculate cost
+                    cost = Decimal("0")
+                    if response.usage and model_info:
+                        prompt_tokens = response.usage.get("prompt_tokens", 0)
+                        completion_tokens = response.usage.get("completion_tokens", 0)
+                        
+                        if model_info.dollars_per_million_tokens_input:
+                            cost += Decimal(str(prompt_tokens)) * model_info.dollars_per_million_tokens_input / Decimal("1000000")
+                        if model_info.dollars_per_million_tokens_output:
+                            cost += Decimal(str(completion_tokens)) * model_info.dollars_per_million_tokens_output / Decimal("1000000")
 
                     record = CallRecord(
                         id=uuid4(),
-                        provider=provider_name,
-                        model=model_name,
                         origin=self.origin,
-                        prompt_tokens=response.usage.get("prompt_tokens") if response.usage else None,
-                        completion_tokens=response.usage.get("completion_tokens") if response.usage else None,
-                        total_tokens=response.usage.get("total_tokens") if response.usage else None,
-                        cost=Decimal(str(cost)) if cost else None,
-                        error=None,
+                        id_at_origin="default",  # TODO: Add user tracking
+                        provider=provider_name,
+                        model_name=model_name,
+                        prompt_tokens=response.usage.get("prompt_tokens", 0) if response.usage else 0,
+                        completion_tokens=response.usage.get("completion_tokens", 0) if response.usage else 0,
+                        total_tokens=response.usage.get("total_tokens", 0) if response.usage else 0,
+                        estimated_cost=cost,
+                        dollars_per_million_tokens_input_used=model_info.dollars_per_million_tokens_input if model_info else None,
+                        dollars_per_million_tokens_output_used=model_info.dollars_per_million_tokens_output if model_info else None,
                     )
                     await self.db.record_api_call(record)
                 except Exception as e:
@@ -253,14 +237,22 @@ class LLMBridge:
             if self.enable_db_logging and self.db:
                 try:
                     from uuid import uuid4
+                    from decimal import Decimal
                     from llmbridge.schemas import CallRecord
 
                     record = CallRecord(
                         id=uuid4(),
-                        provider=provider_name,
-                        model=model_name,
                         origin=self.origin,
-                        error=str(e),
+                        id_at_origin="default",
+                        provider=provider_name,
+                        model_name=model_name,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        total_tokens=0,
+                        estimated_cost=Decimal("0"),
+                        status="error",
+                        error_type=type(e).__name__,
+                        error_message=str(e),
                     )
                     await self.db.record_api_call(record)
                 except Exception as log_error:
