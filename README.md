@@ -13,12 +13,19 @@ Unified Python service to call multiple LLM providers (OpenAI, Anthropic, Google
 ## Installation
 
 ```bash
-# Using uv (recommended)
-uv add llmbridge
-
-# Using pip
+# Basic installation (SQLite support only)
 pip install llmbridge
+
+# With PostgreSQL support  
+pip install "llmbridge[postgres]"
+
+# Development installation
+pip install "llmbridge[dev]"
 ```
+
+### Requirements
+- Python 3.10+
+- API keys for the LLM providers you want to use
 
 ## Quick Start
 

@@ -150,6 +150,12 @@ cython_debug/
 /tmp/
 secrets.yaml
 config.local.yaml
+*.db
+llmbridge.db
+
+# Development symlinks
+pgdbm
+mcp-client
 
 # uv
 uv.lock
