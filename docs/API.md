@@ -49,6 +49,9 @@ request = LLMRequest(
     max_tokens: Optional[int] = None,
     tools: Optional[List[Dict]] = None,
     response_format: Optional[Dict] = None,
+    cache: Optional[Dict[str, Any]] = None,  # {"enabled": True, "ttl_seconds": 600}
+    metadata: Optional[Dict[str, Any]] = None,
+    json_response: Optional[bool] = None,
 )
 
 # Message
