@@ -1,4 +1,16 @@
-"""Example FastAPI application with proper lifecycle management for LLM service."""
+"""
+Example FastAPI application with proper lifecycle management for LLM service.
+
+Requirements:
+    uv add --dev fastapi uvicorn
+
+Run with:
+    uvicorn examples.fastapi_app:app --reload
+
+Test endpoints:
+    http://localhost:8000/health
+    http://localhost:8000/docs
+"""
 
 import os
 from contextlib import asynccontextmanager
