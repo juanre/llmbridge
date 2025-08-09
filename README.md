@@ -146,6 +146,108 @@ async def get_usage():
     await db.close()
 ```
 
+## Command-line Interface (CLI)
+
+The package installs a CLI named `llm-models` for managing the model registry.
+
+### Prerequisites
+- For PostgreSQL mode: a running PostgreSQL and DB env vars
+- For SQLite mode: a writable path to an .db file
+
+Create a `.env` or export variables in your shell:
+
+```bash
+# Option A: PostgreSQL (server)
+export DATABASE_HOST=localhost
+export DATABASE_PORT=5432
+export DATABASE_NAME=postgres
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=postgres
+export DATABASE_SCHEMA=llmbridge
+
+# Option B: SQLite (local file)
+# Either set the env var, or pass --sqlite path on the CLI
+export LLMBRIDGE_SQLITE_DB=./llmbridge.db
+
+# Provider API keys (used for discovery/pricing or generation)
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=...
+export OLLAMA_BASE_URL=http://localhost:11434
+```
+
+### Initialize database schema and migrations
+Run once to create the schema and apply migrations.
+
+- PostgreSQL mode:
+```bash
+python -m llmbridge.scripts.setup_database setup
+python -m llmbridge.scripts.setup_database status
+# DANGEROUS: delete and recreate
+python -m llmbridge.scripts.setup_database reset --force
+```
+
+- SQLite mode: tables are auto-created on first use (no migrations step).
+
+### Populate the models database
+Two options: discover from provider APIs (PostgreSQL only), or load from JSON files (PostgreSQL and SQLite).
+
+- Option A: Discover via provider APIs (PostgreSQL only)
+```bash
+llm-models refresh --dry-run
+llm-models refresh
+llm-models refresh --enable-pricing
+```
+
+- Option B: Load curated JSONs (PostgreSQL or SQLite)
+```bash
+# Generate JSONs (optional helper)
+llm-models extract-from-pdfs download-instructions
+llm-models extract-from-pdfs generate
+
+# Apply to Postgres
+llm-models json-refresh
+
+# Apply to SQLite (use flag or env var)
+llm-models --sqlite ./llmbridge.db json-refresh
+# or
+LLMBRIDGE_SQLITE_DB=./llmbridge.db llm-models json-refresh
+
+# Preview
+llm-models --sqlite ./llmbridge.db json-refresh --dry-run
+```
+
+### Inspecting and maintaining the registry
+
+- PostgreSQL
+```bash
+llm-models list
+llm-models search --vision --max-cost 5
+llm-models info anthropic:claude-3-5-sonnet-20241022
+llm-models suggest cheapest_good
+llm-models status
+llm-models clean free-models
+llm-models clean wipe-all --force
+```
+
+- SQLite
+```bash
+llm-models --sqlite ./llmbridge.db list
+llm-models --sqlite ./llmbridge.db search --vision --max-cost 5
+llm-models --sqlite ./llmbridge.db info anthropic:claude-3-5-sonnet-20241022
+# Heuristic suggestions and status
+llm-models --sqlite ./llmbridge.db suggest --all
+llm-models --sqlite ./llmbridge.db status
+# Maintenance
+llm-models --sqlite ./llmbridge.db clean free-models
+llm-models --sqlite ./llmbridge.db clean wipe-all --force
+```
+
+Notes:
+- In SQLite mode, `refresh` (API discovery) is not supported; use `json-refresh`.
+- Suggestions in SQLite mode are heuristic (computed in CLI) rather than DB functions.
+- Backups apply to PostgreSQL; for SQLite, back up the `.db` file as needed.
+
 ## Configuration
 
 ### Environment Variables

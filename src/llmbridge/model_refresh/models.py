@@ -1,7 +1,7 @@
 """Data models for model refresh operations."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -32,7 +32,7 @@ class ModelInfo:
     is_active: bool = True
     inactive_from: Optional[datetime] = None
     source: str = "api"  # "api", "scrape", "manual"
-    discovered_at: datetime = field(default_factory=datetime.utcnow)
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     raw_data: Dict[str, Any] = field(default_factory=dict)

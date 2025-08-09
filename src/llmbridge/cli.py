@@ -1,10 +1,17 @@
-"""Command-line interface for LLM model management."""
+"""Command-line interface for LLM model management.
+
+Adds optional SQLite support via --sqlite PATH or LLMBRIDGE_SQLITE_DB env var
+for local workflows (list/search/info/status/json-refresh/clean/suggest).
+PostgreSQL remains required for provider API discovery refresh.
+"""
 
 import argparse
 import asyncio
 import json
+import os
 from datetime import datetime
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 from llmbridge import LLMRequest, LLMBridge, Message
 from llmbridge.config import ModelRefreshConfig
@@ -12,6 +19,9 @@ from llmbridge.file_utils import create_file_content
 from llmbridge.model_refresh.complete_refresh_manager import CompleteModelRefreshManager
 from llmbridge.model_refresh.json_refresh_manager import JSONModelRefreshManager
 from llmbridge.model_refresh.refresh_manager import ModelRefreshManager
+from llmbridge.model_refresh.json_model_loader import JSONModelLoader
+from llmbridge.model_refresh.models import ModelInfo
+from llmbridge.db_sqlite import SQLiteDatabase
 
 
 def format_model_table(models, show_pricing=True, show_capabilities=True):
@@ -29,10 +39,10 @@ def format_model_table(models, show_pricing=True, show_capabilities=True):
     header = f"{'Provider':<{provider_width}} {'Model Name':<{name_width}} {'Display Name':<{display_width}}"
 
     if show_pricing:
-        header += " {'Input Cost':<12} {'Output Cost':<12}"
+        header += f" {'Input Cost':<12} {'Output Cost':<12}"
 
     if show_capabilities:
-        header += " {'Context':<10} {'Features':<20}"
+        header += f" {'Context':<10} {'Features':<20}"
 
     lines.append(header)
     lines.append("-" * len(header))
@@ -71,13 +81,32 @@ def format_model_table(models, show_pricing=True, show_capabilities=True):
     return "\n".join(lines)
 
 
+def _is_sqlite_mode(args) -> Tuple[bool, Optional[str]]:
+    """Determine if CLI should operate in SQLite mode and return db path if so."""
+    db_path = getattr(args, "sqlite", None) or os.environ.get("LLMBRIDGE_SQLITE_DB")
+    return (bool(db_path), db_path)
+
+
+async def _sqlite_list_models(
+    db_path: str, provider: Optional[str], active_only: bool
+) -> List:
+    db = SQLiteDatabase(db_path)
+    await db.initialize()
+    try:
+        return await db.list_models(provider=provider, active_only=active_only)
+    finally:
+        await db.close()
+
+
 async def cmd_list_models(args):
     """List models in the database."""
-    config = ModelRefreshConfig.from_environment()
-    refresh_manager = ModelRefreshManager(config.get_database_connection_params())
-
-    # Get models from database
-    models = refresh_manager.db_updater.get_current_models()
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        models = await _sqlite_list_models(db_path, args.provider, args.active_only)
+    else:
+        config = ModelRefreshConfig.from_environment()
+        refresh_manager = ModelRefreshManager(config.get_database_connection_params())
+        models = refresh_manager.db_updater.get_current_models()
 
     # Filter by provider if specified
     if args.provider:
@@ -136,10 +165,13 @@ async def cmd_list_models(args):
 
 async def cmd_search_models(args):
     """Search for models by name or capabilities."""
-    config = ModelRefreshConfig.from_environment()
-    refresh_manager = ModelRefreshManager(config.get_database_connection_params())
-
-    models = refresh_manager.db_updater.get_current_models()
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        models = await _sqlite_list_models(db_path, None, True)
+    else:
+        config = ModelRefreshConfig.from_environment()
+        refresh_manager = ModelRefreshManager(config.get_database_connection_params())
+        models = refresh_manager.db_updater.get_current_models()
 
     # Apply search filters
     if args.name:
@@ -173,10 +205,13 @@ async def cmd_search_models(args):
 
 async def cmd_model_info(args):
     """Get detailed information about a specific model."""
-    config = ModelRefreshConfig.from_environment()
-    refresh_manager = ModelRefreshManager(config.get_database_connection_params())
-
-    models = refresh_manager.db_updater.get_current_models()
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        models = await _sqlite_list_models(db_path, None, False)
+    else:
+        config = ModelRefreshConfig.from_environment()
+        refresh_manager = ModelRefreshManager(config.get_database_connection_params())
+        models = refresh_manager.db_updater.get_current_models()
 
     # Find the model
     model = None
@@ -232,10 +267,49 @@ async def cmd_model_info(args):
 
 async def cmd_status(args):
     """Show system status and statistics."""
-    config = ModelRefreshConfig.from_environment()
-    complete_manager = CompleteModelRefreshManager(config)
-
-    status = complete_manager.get_status_report()
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        # Build a lightweight status from SQLite
+        try:
+            db = SQLiteDatabase(db_path)
+            await db.initialize()
+            models = await db.list_models(active_only=False)
+            await db.close()
+            total = len(models)
+            active = sum(1 for m in models if m.inactive_from is None)
+            by_provider = {}
+            active_by_provider = {}
+            for m in models:
+                by_provider[m.provider] = by_provider.get(m.provider, 0) + 1
+                if m.inactive_from is None:
+                    active_by_provider[m.provider] = (
+                        active_by_provider.get(m.provider, 0) + 1
+                    )
+            status = {
+                "database_status": "connected",
+                "system_ready": total > 0,
+                "total_models": total,
+                "active_models": active,
+                "provider_breakdown": by_provider,
+                "active_by_provider": active_by_provider,
+                "model_discovery_enabled": False,
+                "api_discovery_enabled": False,
+                "price_scraping_enabled": False,
+                "provider_credentials": {},
+            }
+        except Exception:
+            status = {
+                "database_status": "error",
+                "system_ready": False,
+                "total_models": 0,
+                "active_models": 0,
+                "provider_breakdown": {},
+                "active_by_provider": {},
+            }
+    else:
+        config = ModelRefreshConfig.from_environment()
+        complete_manager = CompleteModelRefreshManager(config)
+        status = complete_manager.get_status_report()
 
     print("=== LLM Model Management Status ===")
     print(f"Database: {status['database_status']}")
@@ -279,6 +353,13 @@ async def cmd_status(args):
 
 async def cmd_refresh(args):
     """Refresh models from providers."""
+    sqlite_mode, _ = _is_sqlite_mode(args)
+    if sqlite_mode:
+        print(
+            "SQLite mode: provider API discovery refresh is not supported. Use 'json-refresh'."
+        )
+        return
+
     config = ModelRefreshConfig.from_environment()
 
     # Override pricing configuration if flag is provided
@@ -321,6 +402,18 @@ async def cmd_clean(args):
 
 async def cmd_clean_free_models(args):
     """Remove non-Ollama models without pricing."""
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        db = SQLiteDatabase(db_path)
+        await db.initialize()
+        try:
+            print("=== Cleaning Models Without Pricing (SQLite) ===")
+            affected = await db.clean_free_models()
+            print(f"✓ Deactivated {affected} models without pricing")
+        finally:
+            await db.close()
+        return
+
     config = ModelRefreshConfig.from_environment()
     refresh_manager = ModelRefreshManager(config.get_database_connection_params())
 
@@ -386,6 +479,35 @@ async def cmd_clean_free_models(args):
 
 async def cmd_wipe_all(args):
     """Wipe all models from database."""
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        print("=== WIPING ALL MODELS FROM SQLite DATABASE ===")
+        if not args.force:
+            import sys
+
+            if sys.stdin.isatty():
+                print("⚠️  This will DELETE ALL models - are you sure? (y/N): ", end="")
+                response = input().strip().lower()
+                if response != "y":
+                    print("Aborted.")
+                    return
+            else:
+                print("Use --force flag for non-interactive mode")
+                return
+        else:
+            print("⚠️  Force mode - proceeding with deletion")
+
+        db = SQLiteDatabase(db_path)
+        await db.initialize()
+        try:
+            deleted_calls, deleted_models = await db.wipe_all()
+            print(f"✓ Deleted {deleted_calls} API call records")
+            print(f"✓ Deleted {deleted_models} models from database")
+        finally:
+            await db.close()
+        print("✓ Clean slate ready!")
+        return
+
     config = ModelRefreshConfig.from_environment()
     refresh_manager = ModelRefreshManager(config.get_database_connection_params())
 
@@ -437,6 +559,48 @@ async def cmd_wipe_all(args):
 
 async def cmd_json_refresh(args):
     """Refresh models from JSON files."""
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        print("=== JSON MODEL REFRESH (SQLite) ===")
+        # Load models from JSON
+        models_dir = (
+            Path(args.models_dir)
+            if args.models_dir
+            else Path(__file__).parent.parent.parent / "data" / "models"
+        )
+        loader = JSONModelLoader(models_dir)
+        if args.provider:
+            providers = [args.provider]
+            print(f"Refreshing provider: {args.provider}")
+            all_models = []
+            for p in providers:
+                all_models.extend(loader.load_provider_models(p))
+        else:
+            providers = loader.load_all_models().keys()
+            print(f"Refreshing all providers: {', '.join(sorted(providers))}")
+            all_models = []
+            for p in providers:
+                all_models.extend(loader.load_provider_models(p))
+
+        if args.dry_run:
+            print(f"Loaded {len(all_models)} models from JSON (dry-run)")
+            return
+
+        db = SQLiteDatabase(db_path)
+        await db.initialize()
+        try:
+            inserted, updated = await db.upsert_models(all_models)
+            keep_keys = [(m.provider, m.model_name) for m in all_models]
+            retired = await db.retire_missing_models(
+                list(set([m.provider for m in all_models])), keep_keys
+            )
+        finally:
+            await db.close()
+
+        print(
+            f"\n✓ Applied JSON models: {inserted} inserted, {updated} updated, {retired} retired"
+        )
+        return
 
     config = ModelRefreshConfig.from_environment()
     manager = JSONModelRefreshManager(config, models_dir=args.models_dir)
@@ -560,13 +724,108 @@ async def cmd_debug_pricing(args):
 
 async def cmd_suggest_models(args):
     """Suggest models based on use cases."""
-    config = ModelRefreshConfig.from_environment()
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        # Compute suggestions in-memory from SQLite models
+        db = SQLiteDatabase(db_path)
+        await db.initialize()
+        try:
+            models = await db.list_models(active_only=True)
+        finally:
+            await db.close()
 
+        def pick_by_provider(selector_fn):
+            by_provider = {}
+            for m in models:
+                if m.provider not in by_provider:
+                    by_provider[m.provider] = []
+                by_provider[m.provider].append(m)
+            selections = {}
+            for provider, lst in by_provider.items():
+                choice = selector_fn(lst)
+                if choice:
+                    selections[provider] = choice
+            return selections
+
+        def deepest_selector(lst):
+            # Heuristic: most expensive input cost wins
+            priced = [m for m in lst if m.dollars_per_million_tokens_input]
+            return (
+                max(priced, key=lambda m: float(m.dollars_per_million_tokens_input))
+                if priced
+                else (lst[0] if lst else None)
+            )
+
+        def largest_context_selector(lst):
+            return max(lst, key=lambda m: (m.max_context or 0)) if lst else None
+
+        def largest_output_selector(lst):
+            return max(lst, key=lambda m: (m.max_output_tokens or 0)) if lst else None
+
+        def best_vision_selector(lst):
+            vision = [m for m in lst if m.supports_vision]
+            return (
+                max(vision, key=lambda m: (m.max_context or 0))
+                if vision
+                else (lst[0] if lst else None)
+            )
+
+        def cheapest_good_selector(lst):
+            priced = [m for m in lst if m.dollars_per_million_tokens_input]
+            return (
+                min(priced, key=lambda m: float(m.dollars_per_million_tokens_input))
+                if priced
+                else (lst[0] if lst else None)
+            )
+
+        if args.all:
+            print("\n=== Suggestions (SQLite heuristic) ===")
+            for use_case, selector in [
+                ("deepest_model", deepest_selector),
+                ("largest_context", largest_context_selector),
+                ("largest_output", largest_output_selector),
+                ("best_vision", best_vision_selector),
+                ("cheapest_good", cheapest_good_selector),
+            ]:
+                print(f"\n{use_case}:")
+                picks = pick_by_provider(selector)
+                for provider, m in picks.items():
+                    print(f"  {provider}: {m.model_name} ({m.display_name or ''})")
+            return
+
+        if not args.use_case:
+            print(
+                "Provide a use case or --all. Use cases: deepest_model, largest_context, largest_output, best_vision, cheapest_good"
+            )
+            return
+
+        selector_map = {
+            "deepest_model": deepest_selector,
+            "largest_context": largest_context_selector,
+            "largest_output": largest_output_selector,
+            "best_vision": best_vision_selector,
+            "cheapest_good": cheapest_good_selector,
+        }
+        selector = selector_map[args.use_case]
+        picks = pick_by_provider(selector)
+        if args.provider:
+            m = picks.get(args.provider)
+            if m:
+                print(f"\n{args.provider}: {m.model_name} ({m.display_name or ''})")
+            else:
+                print(f"No suggestion for provider {args.provider}")
+        else:
+            print(f"\n=== Best models for {args.use_case} ===")
+            for provider, m in picks.items():
+                print(f"  {provider}: {m.model_name} ({m.display_name or ''})")
+        return
+
+    # Postgres path (existing behavior)
+    config = ModelRefreshConfig.from_environment()
     # Direct database connection to run SQL functions
     import psycopg2
 
     conn_params = config.get_database_connection_params()
-
     try:
         with psycopg2.connect(**conn_params) as conn:
             with conn.cursor() as cursor:
@@ -1163,6 +1422,12 @@ async def cmd_debug_conservative_refresh(args):
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="LLM Model Management CLI")
+    # Global options
+    parser.add_argument(
+        "--sqlite",
+        help="Path to SQLite database file. If provided (or LLMBRIDGE_SQLITE_DB is set), CLI uses SQLite backend.",
+    )
+
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List models command

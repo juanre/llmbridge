@@ -55,14 +55,15 @@ async def setup_database():
         await db.close()
 
 
-async def reset_database():
+async def reset_database(force: bool = False):
     """Drop and recreate the database schema."""
     print("⚠️  WARNING: This will DELETE all data in the llmbridge schema!")
-    response = input("Are you sure you want to continue? (yes/no): ")
 
-    if response.lower() != "yes":
-        print("Aborted.")
-        return False
+    if not force:
+        response = input("Are you sure you want to continue? (yes/no): ")
+        if response.lower() != "yes":
+            print("Aborted.")
+            return False
 
     db = LLMDatabase()
 
@@ -160,13 +161,18 @@ def main():
     parser.add_argument(
         "command", choices=["setup", "reset", "status"], help="Command to run"
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmations where applicable (e.g., reset)",
+    )
 
     args = parser.parse_args()
 
     if args.command == "setup":
         success = asyncio.run(setup_database())
     elif args.command == "reset":
-        success = asyncio.run(reset_database())
+        success = asyncio.run(reset_database(force=args.force))
     elif args.command == "status":
         success = asyncio.run(check_status())
 

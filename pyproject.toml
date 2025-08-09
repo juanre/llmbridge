@@ -59,9 +59,9 @@ packages = ["src/llmbridge"]
 
 [tool.hatch.build]
 include = [
-    "src/llmbridbge/**/*.py",
-    "src/llmbridbge/**/*.sql",
-    "src/llmbridbge/migrations/*.sql",
+    "src/llmbridge/**/*.py",
+    "src/llmbridge/**/*.sql",
+    "src/llmbridge/migrations/*.sql",
 ]
 
 [tool.pytest.ini_options]
