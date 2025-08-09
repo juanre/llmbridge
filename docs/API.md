@@ -8,8 +8,21 @@ Main service class for routing requests to LLM providers.
 ```python
 service = LLMBridge(
     db_connection_string: Optional[str] = None,  # Database connection
+    db_manager: Optional[AsyncDatabaseManager] = None,  # External DB manager
     origin: str = "llmbridge",                   # App identifier for tracking
     enable_db_logging: bool = True               # Enable database logging
+)
+```
+
+### LLMBridgeSQLite
+Convenience class for SQLite-based usage (local development).
+
+```python
+from llmbridge.service_sqlite import LLMBridgeSQLite
+
+service = LLMBridgeSQLite(
+    db_path: str = "llmbridge.db",  # SQLite database file
+    origin: str = "llmbridge"       # App identifier for tracking
 )
 ```
 
@@ -35,6 +48,24 @@ await db.get_model(provider: str, model_name: str)
 await db.record_api_call(...)
 await db.get_usage_stats(origin: str, id_at_origin: str, days: int = 30)
 await db.list_recent_calls(origin: str, id_at_origin: Optional[str] = None, limit: int = 100, offset: int = 0)
+await db.close()
+```
+
+### SQLiteDatabase
+SQLite database for local development and testing.
+
+```python
+from llmbridge.db_sqlite import SQLiteDatabase
+
+db = SQLiteDatabase(db_path="llmbridge.db")
+await db.initialize()  # Creates tables automatically
+
+# Methods (similar to LLMDatabase)
+await db.list_models(provider: Optional[str] = None, active_only: bool = True)
+await db.get_model(provider: str, model_name: str)
+await db.record_api_call(...)
+await db.get_usage_stats(origin: str, id_at_origin: str, days: int = 30)
+await db.get_recent_calls(origin: str, id_at_origin: Optional[str] = None, limit: int = 100)
 await db.close()
 ```
 
@@ -116,4 +147,22 @@ stats = UsageStats(
     avg_cost_per_call: Decimal,
     success_rate: Decimal,
 )
+```
+
+## Caching
+
+Response caching is available for deterministic requests (temperature ≤ 0.1).
+
+```python
+# Enable caching for a request
+request = LLMRequest(
+    messages=[Message(role="user", content="Hello")],
+    model="gpt-4o-mini",
+    temperature=0,  # Must be ≤ 0.1 for caching
+    cache={"enabled": True, "ttl_seconds": 300}  # Cache for 5 minutes
+)
+
+# Cache backends:
+# - SQLite/PostgreSQL: If DB logging is enabled, uses database cache
+# - In-memory: If no DB, uses in-memory cache (not persistent)
 ```
