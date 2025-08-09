@@ -1,15 +1,14 @@
 # LLMBridge
 
-A unified Python service for interacting with multiple LLM providers (OpenAI, Anthropic, Google, Ollama) with automatic model management, usage tracking, and cost calculation.
+Unified Python service to call multiple LLM providers (OpenAI, Anthropic, Google, Ollama) with one API. Optional DB logging and model registry. Built-in response caching.
 
-## Features
+## Highlights
 
-- **Unified Interface**: Single API for all LLM providers
-- **Database Options**: Use SQLite for local development or PostgreSQL for production
-- **Automatic Model Registry**: Pre-configured with latest models and pricing
-- **Usage Tracking**: Track API calls, costs, and usage patterns
-- **File Support**: Handle images and PDFs across providers
-- **Type Safety**: Full type hints and Pydantic validation
+- **One interface** for all providers
+- **Optional DB** (SQLite or PostgreSQL) for logging/models
+- **Built-in caching** (opt‑in, TTL, deterministic requests)
+- **Model registry & costs** (optional)
+- **Files/images** helpers
 
 ## Installation
 
@@ -23,7 +22,7 @@ pip install llmbridge
 
 ## Quick Start
 
-### 1. Basic Usage (No Database)
+### 1) No database (just call a model)
 
 ```python
 import asyncio
@@ -46,7 +45,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### 2. With SQLite Database (Local Development)
+### 2) With SQLite (local logging)
 
 ```python
 import asyncio
@@ -60,7 +59,7 @@ async def main():
     # Or specify a custom SQLite file
     service = LLMBridgeSQLite(db_path="my_app.db")
     
-    # Make requests - all calls are logged to database
+    # Calls are logged to SQLite
     request = LLMRequest(
         messages=[Message(role="user", content="Hello!")],
         model="claude-3-5-haiku-20241022"
@@ -73,7 +72,7 @@ async def main():
 asyncio.run(main())
 ```
 
-### 3. With PostgreSQL Database (Production)
+### 3) With PostgreSQL (production logging)
 
 ```python
 import asyncio
@@ -85,188 +84,78 @@ async def main():
         db_connection_string="postgresql://user:pass@localhost/dbname"
     )
     
-    # Your application code here
-    ...
+    # Use service.chat(...) as above
 
 asyncio.run(main())
 ```
 
-## Database Setup
+## Database setup (optional)
 
-### SQLite (Automatic)
-No setup needed! The database and tables are created automatically when you first use it.
+- SQLite: no setup, tables auto-created on first use.
+- PostgreSQL: point `db_connection_string` to an existing DB; schema/tables are created on first use.
 
-### PostgreSQL
-```bash
-# 1. Create database
-createdb llmbridge
+## Caching
 
-# 2. Run migrations (automatic on first use)
-# Tables and default models are created automatically
-```
-
-## Model Management
-
-### List Available Models
+Response cache is opt‑in per request and applies only to deterministic calls (temperature ≤ 0.1). You control the TTL.
 
 ```python
-from llmbridge.db_sqlite import SQLiteDatabase
-
-async def list_models():
-    db = SQLiteDatabase()  # Uses SQLite
-    await db.initialize()
-    
-    # List all active models
-    models = await db.list_models()
-    for model in models:
-        print(f"{model.provider}:{model.model_name} - ${model.dollars_per_million_tokens_input}/M input")
-    
-    await db.close()
-```
-
-### Get Usage Statistics
-
-```python
-async def get_usage():
-    # For SQLite
-    from llmbridge.db_sqlite import SQLiteDatabase
-    db = SQLiteDatabase()
-    
-    # For PostgreSQL
-    # from llmbridge.db import LLMDatabase
-    # db = LLMDatabase(connection_string="postgresql://...")
-    
-    await db.initialize()
-    
-    # Get usage for last 30 days
-    stats = await db.get_usage_stats(days=30)
-    print(f"Total calls: {stats.total_calls}")
-    print(f"Total cost: ${stats.total_cost:.2f}")
-    
-    await db.close()
-```
-
-## Command-line Interface (CLI)
-
-The package installs a CLI named `llm-models` for managing the model registry.
-
-### Prerequisites
-- For PostgreSQL mode: a running PostgreSQL and DB env vars
-- For SQLite mode: a writable path to an .db file
-
-Create a `.env` or export variables in your shell:
-
-```bash
-# Option A: PostgreSQL (server)
-export DATABASE_HOST=localhost
-export DATABASE_PORT=5432
-export DATABASE_NAME=postgres
-export DATABASE_USER=postgres
-export DATABASE_PASSWORD=postgres
-export DATABASE_SCHEMA=llmbridge
-
-# Option B: SQLite (local file)
-# Either set the env var, or pass --sqlite path on the CLI
-export LLMBRIDGE_SQLITE_DB=./llmbridge.db
-
-# Provider API keys (used for discovery/pricing or generation)
-export OPENAI_API_KEY=sk-...
-export ANTHROPIC_API_KEY=sk-ant-...
-export GOOGLE_API_KEY=...
-export OLLAMA_BASE_URL=http://localhost:11434
-```
-
-### Initialize database schema and migrations
-Run once to create the schema and apply migrations.
-
-- PostgreSQL mode:
-```bash
-python -m llmbridge.scripts.setup_database setup
-python -m llmbridge.scripts.setup_database status
-# DANGEROUS: delete and recreate
-python -m llmbridge.scripts.setup_database reset --force
-```
-
-- SQLite mode: tables are auto-created on first use (no migrations step).
-
-### Populate the models database
-Two options: discover from provider APIs (PostgreSQL only), or load from JSON files (PostgreSQL and SQLite).
-
-- Option A: Discover via provider APIs (PostgreSQL only)
-```bash
-llm-models refresh --dry-run
-llm-models refresh
-llm-models refresh --enable-pricing
-```
-
-- Option B: Load curated JSONs (PostgreSQL or SQLite)
-```bash
-# Generate JSONs (optional helper)
-llm-models extract-from-pdfs download-instructions
-llm-models extract-from-pdfs generate
-
-# Apply to Postgres
-llm-models json-refresh
-
-# Apply to SQLite (use flag or env var)
-llm-models --sqlite ./llmbridge.db json-refresh
-# or
-LLMBRIDGE_SQLITE_DB=./llmbridge.db llm-models json-refresh
-
-# Preview
-llm-models --sqlite ./llmbridge.db json-refresh --dry-run
-```
-
-### Inspecting and maintaining the registry
-
-- PostgreSQL
-```bash
-llm-models list
-llm-models search --vision --max-cost 5
-llm-models info anthropic:claude-3-5-sonnet-20241022
-llm-models suggest cheapest_good
-llm-models status
-llm-models clean free-models
-llm-models clean wipe-all --force
-```
-
-- SQLite
-```bash
-llm-models --sqlite ./llmbridge.db list
-llm-models --sqlite ./llmbridge.db search --vision --max-cost 5
-llm-models --sqlite ./llmbridge.db info anthropic:claude-3-5-sonnet-20241022
-# Heuristic suggestions and status
-llm-models --sqlite ./llmbridge.db suggest --all
-llm-models --sqlite ./llmbridge.db status
-# Maintenance
-llm-models --sqlite ./llmbridge.db clean free-models
-llm-models --sqlite ./llmbridge.db clean wipe-all --force
+request = LLMRequest(
+    messages=[Message(role="user", content="What is RAG?")],
+    model="gpt-4o-mini",
+    temperature=0.0,
+    cache={"enabled": True, "ttl_seconds": 600},
+)
+response = await service.chat(request)
 ```
 
 Notes:
-- In SQLite mode, `refresh` (API discovery) is not supported; use `json-refresh`.
-- Suggestions in SQLite mode are heuristic (computed in CLI) rather than DB functions.
-- Backups apply to PostgreSQL; for SQLite, back up the `.db` file as needed.
+- Cache key is provider‑agnostic (messages, model, format, tools, limits, temperature).
+- If DB logging is on, a small DB‑backed cache is used; otherwise in‑memory.
+- Anthropic additionally uses provider‑side prompt caching for the system prompt when `cache.enabled` is true.
+
+## Model registry (optional)
+
+When DB logging is enabled, you can query models and usage via the service:
+
+```python
+# List active models
+models = await service.get_models_from_db()
+for m in models:
+    print(m.provider, m.model_name)
+
+# Per-user usage (id_at_origin is your user/session ID)
+stats = await service.get_usage_stats(id_at_origin="user-123", days=30)
+```
+
+## CLI (optional)
+
+`llm-models` manages the registry. Typical flows:
+
+```bash
+# Load curated JSONs (PostgreSQL or SQLite)
+llm-models json-refresh
+
+# With SQLite file
+llm-models --sqlite ./llmbridge.db json-refresh
+```
 
 ## Configuration
 
-### Environment Variables
-
-Create a `.env` file:
+Set env vars or a `.env` file:
 
 ```bash
 # API Keys (at least one required)
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_API_KEY=...  # or GEMINI_API_KEY
-OLLAMA_API_BASE=http://localhost:11434  # Optional
+OLLAMA_BASE_URL=http://localhost:11434  # Optional
 
 # Database (optional)
 DATABASE_URL=postgresql://user:pass@localhost/dbname  # For PostgreSQL
 # Or leave unset to use SQLite
 ```
 
-### Provider-Specific Models
+### Provider selection
 
 ```python
 # Explicitly specify provider
@@ -286,7 +175,7 @@ response = await service.chat(
 )
 ```
 
-## File and Image Support
+## Files and images
 
 ```python
 from llmbridge.file_utils import analyze_image
@@ -305,34 +194,18 @@ request = LLMRequest(
 response = await service.chat(request)
 ```
 
-## API Reference
+## Reference (minimal)
 
-### Core Classes
-
-- `LLMBridge`: Main service class for routing requests
-- `LLMDatabase`: Database interface for model registry and usage tracking
-- `LLMRequest`: Request model with messages and parameters
-- `LLMResponse`: Response model with content and usage metadata
-- `Message`: Individual message in a conversation
-
-### Key Methods
-
-- `service.chat(request)`: Send a chat request to an LLM
-- `db.list_models()`: List available models
-- `db.get_usage_stats()`: Get usage statistics
-- `db.record_api_call()`: Log an API call
+- `LLMBridge` (service) → `await service.chat(LLMRequest(...))`
+- `LLMRequest` fields: `messages`, `model`, optional `temperature`, `max_tokens`, `tools`, `response_format`, `cache={enabled: bool, ttl_seconds: int}`
+- Provider string: `"provider:model"` or just `"model"` (auto-detected)
+- Optional DB helpers: `await service.get_models_from_db()`, `await service.get_usage_stats(id_at_origin, days)`
 
 ## Development
 
 ```bash
-# Install with dev dependencies
 uv pip install -e ".[dev]"
-
-# Run tests
 pytest
-
-# Run specific test file
-pytest tests/test_sqlite_backend.py
 ```
 
 ## License

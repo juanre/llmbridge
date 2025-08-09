@@ -26,6 +26,10 @@ class LLMRequest(BaseModel):
     response_format: Optional[Dict[str, Any]] = None
     tools: Optional[List[Dict[str, Any]]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    # New fields for unified interface and caching
+    cache: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    json_response: Optional[bool] = None
 
 
 class LLMResponse(BaseModel):

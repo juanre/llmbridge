@@ -129,6 +129,7 @@ class AnthropicProvider(BaseLLMProvider):
         response_format: Optional[Dict[str, Any]] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+        cache: Optional[Dict[str, Any]] = None,
     ) -> LLMResponse:
         """
         Send a chat request to the Anthropic Claude API using the official SDK.
