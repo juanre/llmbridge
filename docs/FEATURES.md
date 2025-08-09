@@ -11,32 +11,19 @@ The service provides intelligent model selection based on use cases:
 - **`cheapest_good`**: Best price/performance ratio
 
 ```python
-# Get model recommendations
-models = await db.list_models()
-# Filter by capabilities as needed
-vision_models = [m for m in models if m.supports_vision]
+# Get usage-hint recommendations per provider via SQL helper views/functions
+# Example: use the view materialized by migrations
+rows = await db.db.fetch_all("SELECT * FROM {{tables.llm_models}}")
+
+# Or use API layer to filter
+from llmbridge.api.service import LLMBridgeAPI
+api = LLMBridgeAPI(db)
+vision_models = [m for m in await api.list_models() if m.supports_vision]
 ```
 
-## PDF and File Handling
+## File handling
 
-The service supports PDF files across providers:
-
-- **Anthropic**: Native PDF support using document content blocks
-- **Google**: Native PDF support using inline document data
-- **OpenAI**: Automatic routing to Assistants API for PDFs
-- **Ollama**: Text-only (no document support)
-
-```python
-from llmbridge.file_utils import analyze_file
-
-# Analyze a PDF
-content = analyze_file("document.pdf", "Summarize this document")
-request = LLMRequest(
-    messages=[Message(role="user", content=content)],
-    model="claude-3-5-sonnet-20241022"
-)
-response = await service.chat(request)
-```
+Providers accept text and multimodal content via their official SDKs. For PDFs or images, convert to supported input formats (base64 inline blobs or URLs) using the `Message.content` list structure shown in provider docs/code.
 
 ## Function Calling
 

@@ -412,8 +412,8 @@ class LLMDatabase:
         query = self.db._prepare_query(
             """
             UPDATE {{tables.llm_models}}
-            SET cost_per_token_input = $3,
-                cost_per_token_output = $4,
+            SET dollars_per_million_tokens_input = $3,
+                dollars_per_million_tokens_output = $4,
                 updated_at = CURRENT_TIMESTAMP
             WHERE provider = $1 AND model_name = $2
         """
@@ -900,7 +900,7 @@ class LLMDatabase:
                 "status": "healthy",
                 "pool": pool_stats,
                 "metrics": metrics,
-                "schema": self.config.schema,
+                "schema": getattr(self.db, "schema", None),
                 "monitoring_enabled": isinstance(
                     self.db, MonitoredAsyncDatabaseManager
                 ),

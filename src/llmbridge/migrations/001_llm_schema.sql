@@ -1,19 +1,15 @@
--- LLM Service Database Schema
+-- LLM Service Database Schema (schema-aware)
 -- Models registry and API call tracking
 
--- Enable necessary extensions
+-- Enable necessary extensions (in public schema)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Create schema if not exists
-CREATE SCHEMA IF NOT EXISTS llmbridge;
-SET search_path TO llmbridge, public;
 
 -- =====================================================
 -- UTILITY FUNCTIONS
 -- =====================================================
 
 -- Auto-update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at()
+CREATE OR REPLACE FUNCTION {{schema}}.update_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = CURRENT_TIMESTAMP;
@@ -26,7 +22,7 @@ $$ LANGUAGE plpgsql;
 -- =====================================================
 
 -- Available LLM models with cost and capability information
-CREATE TABLE llm_models (
+CREATE TABLE IF NOT EXISTS {{tables.llm_models}} (
     id SERIAL PRIMARY KEY,
     provider VARCHAR(50) NOT NULL CHECK (provider IN ('anthropic', 'openai', 'google', 'ollama')),
     model_name VARCHAR(100) NOT NULL,
@@ -59,7 +55,7 @@ CREATE TABLE llm_models (
 -- =====================================================
 
 -- Track all LLM API calls with cost and usage information
-CREATE TABLE llm_api_calls (
+CREATE TABLE IF NOT EXISTS {{tables.llm_api_calls}} (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Origin tracking (required fields)
@@ -67,7 +63,7 @@ CREATE TABLE llm_api_calls (
     id_at_origin VARCHAR(255) NOT NULL, -- user identifier at the origin (username, user_id, etc.)
 
     -- Model and provider information
-    model_id INTEGER REFERENCES llm_models(id),
+    model_id INTEGER REFERENCES {{tables.llm_models}}(id),
     provider VARCHAR(50) NOT NULL,
     model_name VARCHAR(100) NOT NULL,
 
@@ -116,7 +112,7 @@ CREATE TABLE llm_api_calls (
 -- =====================================================
 
 -- Daily aggregated usage by origin and user
-CREATE TABLE usage_analytics_daily (
+CREATE TABLE IF NOT EXISTS {{tables.usage_analytics_daily}} (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- Origin and user
@@ -153,43 +149,39 @@ CREATE TABLE usage_analytics_daily (
 -- INDEXES
 -- =====================================================
 
--- LLM models indexes
-CREATE INDEX idx_llm_models_provider ON llm_models(provider);
-CREATE INDEX idx_llm_models_active ON llm_models(inactive_from) WHERE inactive_from IS NULL;
-CREATE INDEX idx_llm_models_provider_active ON llm_models(provider, inactive_from) WHERE inactive_from IS NULL;
+CREATE INDEX IF NOT EXISTS idx_llm_models_provider ON {{tables.llm_models}}(provider);
+CREATE INDEX IF NOT EXISTS idx_llm_models_active ON {{tables.llm_models}}(inactive_from) WHERE inactive_from IS NULL;
+CREATE INDEX IF NOT EXISTS idx_llm_models_provider_active ON {{tables.llm_models}}(provider, inactive_from) WHERE inactive_from IS NULL;
 
--- API calls indexes
-CREATE INDEX idx_llm_api_calls_origin ON llm_api_calls(origin);
-CREATE INDEX idx_llm_api_calls_origin_user ON llm_api_calls(origin, id_at_origin);
-CREATE INDEX idx_llm_api_calls_called_at ON llm_api_calls(called_at DESC);
-CREATE INDEX idx_llm_api_calls_origin_called_at ON llm_api_calls(origin, called_at DESC);
-CREATE INDEX idx_llm_api_calls_model ON llm_api_calls(model_id);
-CREATE INDEX idx_llm_api_calls_provider_model ON llm_api_calls(provider, model_name);
-CREATE INDEX idx_llm_api_calls_status ON llm_api_calls(status);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_origin ON {{tables.llm_api_calls}}(origin);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_origin_user ON {{tables.llm_api_calls}}(origin, id_at_origin);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_called_at ON {{tables.llm_api_calls}}(called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_origin_called_at ON {{tables.llm_api_calls}}(origin, called_at DESC);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_model ON {{tables.llm_api_calls}}(model_id);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_provider_model ON {{tables.llm_api_calls}}(provider, model_name);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_status ON {{tables.llm_api_calls}}(status);
 -- Date index for daily aggregation queries
-CREATE INDEX idx_llm_api_calls_called_at_date ON llm_api_calls(called_at);
+CREATE INDEX IF NOT EXISTS idx_llm_api_calls_called_at_date ON {{tables.llm_api_calls}}(called_at);
 
--- Analytics indexes
-CREATE INDEX idx_usage_analytics_daily_origin ON usage_analytics_daily(origin);
-CREATE INDEX idx_usage_analytics_daily_origin_user ON usage_analytics_daily(origin, id_at_origin);
-CREATE INDEX idx_usage_analytics_daily_date ON usage_analytics_daily(date DESC);
-CREATE INDEX idx_usage_analytics_daily_provider_model ON usage_analytics_daily(provider, model_name);
+CREATE INDEX IF NOT EXISTS idx_usage_analytics_daily_origin ON {{tables.usage_analytics_daily}}(origin);
+CREATE INDEX IF NOT EXISTS idx_usage_analytics_daily_origin_user ON {{tables.usage_analytics_daily}}(origin, id_at_origin);
+CREATE INDEX IF NOT EXISTS idx_usage_analytics_daily_date ON {{tables.usage_analytics_daily}}(date DESC);
+CREATE INDEX IF NOT EXISTS idx_usage_analytics_daily_provider_model ON {{tables.usage_analytics_daily}}(provider, model_name);
 
 -- =====================================================
 -- TRIGGERS
 -- =====================================================
 
--- Auto-update triggers
 CREATE TRIGGER llm_models_updated_at_trigger
-BEFORE UPDATE ON llm_models
-FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+BEFORE UPDATE ON {{tables.llm_models}}
+FOR EACH ROW EXECUTE FUNCTION {{schema}}.update_updated_at();
 
 -- =====================================================
 -- FUNCTIONS
 -- =====================================================
 
 -- Record an API call with automatic cost calculation
-CREATE OR REPLACE FUNCTION record_api_call(
+CREATE OR REPLACE FUNCTION {{schema}}.record_api_call(
     p_origin VARCHAR(255),
     p_id_at_origin VARCHAR(255),
     p_provider VARCHAR(50),
@@ -218,7 +210,7 @@ BEGIN
     -- Get model information and costs
     SELECT id, dollars_per_million_tokens_input, dollars_per_million_tokens_output
     INTO v_model_id, v_cost_input, v_cost_output
-    FROM llm_models
+    FROM {{tables.llm_models}}
     WHERE provider = p_provider AND model_name = p_model_name AND inactive_from IS NULL
     LIMIT 1;
 
@@ -230,7 +222,7 @@ BEGIN
     END IF;
 
     -- Insert the API call record
-    INSERT INTO llm_api_calls (
+    INSERT INTO {{tables.llm_api_calls}} (
         origin, id_at_origin, model_id, provider, model_name,
         prompt_tokens, completion_tokens, total_tokens,
         estimated_cost, dollars_per_million_tokens_input_used, dollars_per_million_tokens_output_used,
@@ -249,11 +241,11 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Aggregate daily analytics
-CREATE OR REPLACE FUNCTION aggregate_daily_analytics(p_date DATE DEFAULT CURRENT_DATE - INTERVAL '1 day')
+CREATE OR REPLACE FUNCTION {{schema}}.aggregate_daily_analytics(p_date DATE DEFAULT CURRENT_DATE - INTERVAL '1 day')
 RETURNS VOID AS $$
 BEGIN
     -- Insert or update daily aggregates
-    INSERT INTO usage_analytics_daily (
+    INSERT INTO {{tables.usage_analytics_daily}} (
         origin, id_at_origin, date, provider, model_name,
         total_calls, total_tokens, total_prompt_tokens, total_completion_tokens, total_cost,
         avg_response_time_ms, success_rate, error_count, timeout_count, rate_limit_count
@@ -274,7 +266,7 @@ BEGIN
         COUNT(*) FILTER (WHERE status = 'error') as error_count,
         COUNT(*) FILTER (WHERE status = 'timeout') as timeout_count,
         COUNT(*) FILTER (WHERE status = 'rate_limited') as rate_limit_count
-    FROM llm_api_calls
+    FROM {{tables.llm_api_calls}}
     WHERE called_at::date = p_date
     GROUP BY origin, id_at_origin, called_at::date, provider, model_name
     ON CONFLICT (origin, id_at_origin, date, provider, model_name) DO UPDATE SET
@@ -292,7 +284,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Get usage statistics for an origin and user
-CREATE OR REPLACE FUNCTION get_usage_stats(
+CREATE OR REPLACE FUNCTION {{schema}}.get_usage_stats(
     p_origin VARCHAR(255),
     p_id_at_origin VARCHAR(255),
     p_days INTEGER DEFAULT 30
@@ -317,7 +309,7 @@ BEGIN
         END as avg_cost_per_call,
         (
             SELECT model_name
-            FROM llm_api_calls
+            FROM {{tables.llm_api_calls}}
             WHERE origin = p_origin AND id_at_origin = p_id_at_origin
                 AND called_at >= CURRENT_DATE - INTERVAL '1 day' * p_days
             GROUP BY model_name
@@ -329,7 +321,7 @@ BEGIN
             ELSE 0::DECIMAL
         END as success_rate,
         AVG(ac.response_time_ms)::INTEGER as avg_response_time_ms
-    FROM llm_api_calls ac
+    FROM {{tables.llm_api_calls}} ac
     WHERE ac.origin = p_origin
         AND ac.id_at_origin = p_id_at_origin
         AND ac.called_at >= CURRENT_DATE - INTERVAL '1 day' * p_days;
@@ -341,7 +333,7 @@ $$ LANGUAGE plpgsql;
 -- =====================================================
 
 -- Insert default LLM models (costs in dollars per million tokens)
-INSERT INTO llm_models (provider, model_name, display_name, description, max_context, max_output_tokens, supports_vision, supports_function_calling, supports_json_mode, supports_parallel_tool_calls, dollars_per_million_tokens_input, dollars_per_million_tokens_output) VALUES
+INSERT INTO {{tables.llm_models}} (provider, model_name, display_name, description, max_context, max_output_tokens, supports_vision, supports_function_calling, supports_json_mode, supports_parallel_tool_calls, dollars_per_million_tokens_input, dollars_per_million_tokens_output) VALUES
 -- Anthropic models
 ('anthropic', 'claude-3-opus-20240229', 'Claude 3 Opus', 'Most capable Claude 3 model', 200000, 4096, TRUE, TRUE, FALSE, FALSE, 15.00, 75.00),
 ('anthropic', 'claude-3-sonnet-20240229', 'Claude 3 Sonnet', 'Balanced Claude 3 model', 200000, 4096, TRUE, TRUE, FALSE, FALSE, 3.00, 15.00),
@@ -365,12 +357,12 @@ INSERT INTO llm_models (provider, model_name, display_name, description, max_con
 -- COMMENTS
 -- =====================================================
 
-COMMENT ON TABLE llm_models IS 'Registry of available LLM models with cost and capability information';
-COMMENT ON TABLE llm_api_calls IS 'Tracks all LLM API calls with origin, cost, and usage information';
-COMMENT ON TABLE usage_analytics_daily IS 'Daily aggregated usage statistics by origin and user';
+COMMENT ON TABLE {{tables.llm_models}} IS 'Registry of available LLM models with cost and capability information';
+COMMENT ON TABLE {{tables.llm_api_calls}} IS 'Tracks all LLM API calls with origin, cost, and usage information';
+COMMENT ON TABLE {{tables.usage_analytics_daily}} IS 'Daily aggregated usage statistics by origin and user';
 
-COMMENT ON COLUMN llm_api_calls.origin IS 'Name of the calling program/application (e.g., "mcp-client", "code-assistant")';
-COMMENT ON COLUMN llm_api_calls.id_at_origin IS 'User identifier at the origin (username, user_id, session_id, etc.)';
-COMMENT ON COLUMN llm_models.dollars_per_million_tokens_input IS 'Cost in dollars per million input tokens';
-COMMENT ON COLUMN llm_models.dollars_per_million_tokens_output IS 'Cost in dollars per million output tokens';
-COMMENT ON COLUMN llm_models.inactive_from IS 'Timestamp when model became inactive (NULL means currently active)';
+COMMENT ON COLUMN {{tables.llm_api_calls}}.origin IS 'Name of the calling program/application (e.g., "mcp-client", "code-assistant")';
+COMMENT ON COLUMN {{tables.llm_api_calls}}.id_at_origin IS 'User identifier at the origin (username, user_id, session_id, etc.)';
+COMMENT ON COLUMN {{tables.llm_models}}.dollars_per_million_tokens_input IS 'Cost in dollars per million input tokens';
+COMMENT ON COLUMN {{tables.llm_models}}.dollars_per_million_tokens_output IS 'Cost in dollars per million output tokens';
+COMMENT ON COLUMN {{tables.llm_models}}.inactive_from IS 'Timestamp when model became inactive (NULL means currently active)';

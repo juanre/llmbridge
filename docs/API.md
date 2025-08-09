@@ -14,20 +14,27 @@ service = LLMBridge(
 ```
 
 ### LLMDatabase
-Database interface for model registry and usage tracking.
+Database interface for model registry and usage tracking. Supports owning its connection or using an injected `AsyncDatabaseManager` with a shared pool and schema isolation.
 
 ```python
-db = LLMDatabase(
-    connection_string: Optional[str] = None  # None = SQLite, or PostgreSQL URL
-)
+from pgdbm import AsyncDatabaseManager
+
+# Standalone (owns connection)
+db = LLMDatabase(connection_string="postgresql://...")
+await db.initialize()  # runs single initial migration in configured schema (or public)
+
+# Shared pool (injected manager with schema)
+pool = await AsyncDatabaseManager.create_shared_pool(config)
+db_manager = AsyncDatabaseManager(pool=pool, schema="llmbridge")
+db = LLMDatabase(db_manager=db_manager)
+await db.initialize()
 
 # Methods
-await db.initialize()
 await db.list_models(provider: Optional[str] = None, active_only: bool = True)
 await db.get_model(provider: str, model_name: str)
-await db.record_api_call(call_record: CallRecord)
-await db.get_usage_stats(origin: Optional[str] = None, days: int = 30)
-await db.get_recent_calls(limit: int = 100, offset: int = 0)
+await db.record_api_call(...)
+await db.get_usage_stats(origin: str, id_at_origin: str, days: int = 30)
+await db.list_recent_calls(origin: str, id_at_origin: Optional[str] = None, limit: int = 100, offset: int = 0)
 await db.close()
 ```
 
@@ -89,6 +96,8 @@ model = LLMModel(
     max_output_tokens: Optional[int],
     supports_vision: bool,
     supports_function_calling: bool,
+    supports_json_mode: bool,
+    supports_parallel_tool_calls: bool,
     dollars_per_million_tokens_input: Optional[Decimal],
     dollars_per_million_tokens_output: Optional[Decimal],
 )
