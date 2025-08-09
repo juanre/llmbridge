@@ -211,14 +211,30 @@ response = await service.chat(request)
 ## Development
 
 ```bash
-uv pip install -e ".[dev]"
-pytest
+# Clone and install
+git clone https://github.com/juanreyero/llmbridge.git
+cd llmbridge
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/
+
+# Format code
+black src/ tests/
+isort src/ tests/
 ```
+
+### Contributing
+
+1. Fork the repo and create a feature branch
+2. Make changes and add tests
+3. Ensure tests pass and code is formatted
+4. Submit a pull request
+
+Note: The repo may contain symlinks (pgdbm, mcp-client) for local development. These are gitignored and not required.
 
 ## License
 
 MIT
-
-## Contributing
 
 Pull requests welcome! Please ensure all tests pass and add new tests for new features.
