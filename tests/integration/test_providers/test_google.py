@@ -171,8 +171,8 @@ class TestGoogleProviderIntegration:
             )
 
         # Make 3 concurrent requests
-        tasks = [make_request(i) for i in range(1, 4)]
-        responses = await asyncio.gather(*tasks)
+        agents = [make_request(i) for i in range(1, 4)]
+        responses = await asyncio.gather(*agents)
 
         assert len(responses) == 3
         for response in responses:
@@ -234,7 +234,7 @@ class TestGoogleProviderIntegration:
         try:
             response = await provider.chat(
                 messages=messages,
-                model="gemini-1.5-pro",  # Use Pro for vision tasks
+                model="gemini-1.5-pro",  # Use Pro for vision agents
                 max_tokens=100,
             )
 

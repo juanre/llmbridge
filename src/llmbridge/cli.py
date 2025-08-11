@@ -1172,10 +1172,10 @@ MODELS DATA:
 {json.dumps(flattened_models, indent=2)}
 
 USE CASES TO SELECT FOR:
-1. "deepest_model": The model you would use for your most complex tasks (best intelligence/reasoning)
+1. "deepest_model": The model you would use for your most complex agents (best intelligence/reasoning)
 2. "largest_context": The model with the largest context window (max_context)
 3. "largest_output": The model with the largest output capacity (max_output_tokens)
-4. "best_vision": The best model for vision/image understanding tasks
+4. "best_vision": The best model for vision/image understanding agents
 5. "cheapest_good": The cheapest model that still provides good quality (not just the absolute cheapest)
 
 IMPORTANT REQUIREMENTS:

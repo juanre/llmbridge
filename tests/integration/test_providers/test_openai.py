@@ -215,8 +215,8 @@ class TestOpenAIProviderIntegration:
             )
 
         # Make 3 concurrent requests
-        tasks = [make_request(i) for i in range(1, 4)]
-        responses = await asyncio.gather(*tasks)
+        agents = [make_request(i) for i in range(1, 4)]
+        responses = await asyncio.gather(*agents)
 
         assert len(responses) == 3
         for response in responses:

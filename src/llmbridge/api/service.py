@@ -34,7 +34,7 @@ class LLMBridgeAPI:
     - Model Management: Activating/deactivating models
     - Model Validation: Checking model availability and requirements
     - Service Health: Monitoring service status
-    - Utility Methods: Helper functions for common tasks
+    - Utility Methods: Helper functions for common agents
 
     Example:
         api = LLMBridgeAPI(db)

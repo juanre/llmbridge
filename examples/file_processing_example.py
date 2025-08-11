@@ -4,7 +4,7 @@ Example demonstrating file processing with the LLM Service.
 
 This example shows how to:
 1. Process images from files and URLs
-2. Use convenience functions for common tasks
+2. Use convenience functions for common agents
 3. Handle multiple images
 4. Work with different file types
 

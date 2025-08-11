@@ -171,8 +171,8 @@ class TestOllamaProviderIntegration:
             )
 
         # Make 2 concurrent requests (be gentle with local Ollama)
-        tasks = [make_request(i) for i in range(1, 3)]
-        responses = await asyncio.gather(*tasks)
+        agents = [make_request(i) for i in range(1, 3)]
+        responses = await asyncio.gather(*agents)
 
         assert len(responses) == 2
         for response in responses:

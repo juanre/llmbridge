@@ -315,7 +315,7 @@ class OpenAIProvider(BaseLLMProvider):
             if thread_id:
                 cleanup_tasks.append(self.client.beta.threads.delete(thread_id))
 
-            # Execute cleanup tasks
+            # Execute cleanup agents
             if cleanup_tasks:
                 try:
                     await asyncio.gather(*cleanup_tasks, return_exceptions=True)

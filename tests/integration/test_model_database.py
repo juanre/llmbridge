@@ -196,7 +196,7 @@ class TestLLMBridgeDatabaseIntegration:
     async def test_concurrent_model_fetches(self, llmbridge, sample_models):
         """Test concurrent database operations."""
         # Create multiple concurrent requests
-        tasks = [
+        agents = [
             llmbridge.get_models_from_db(),
             llmbridge.get_models_from_db(provider="openai"),
             llmbridge.get_model_from_db("anthropic", "test-claude-3"),
@@ -204,7 +204,7 @@ class TestLLMBridgeDatabaseIntegration:
         ]
 
         # Execute concurrently
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*agents)
 
         # Verify results
         assert len(results) == 4
