@@ -2,7 +2,7 @@
 -- Models registry and API call tracking
 
 -- Enable necessary extensions (in public schema)
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- =====================================================
 -- UTILITY FUNCTIONS

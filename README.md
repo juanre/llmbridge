@@ -138,14 +138,14 @@ stats = await service.get_usage_stats(id_at_origin="user-123", days=30)
 
 ## CLI (optional)
 
-`llm-models` manages the registry. Typical flows:
+`llmbridge` manages the registry. Typical flows:
 
 ```bash
 # Load curated JSONs (PostgreSQL or SQLite)
-llm-models json-refresh
+llmbridge json-refresh
 
 # With SQLite file
-llm-models --sqlite ./llmbridge.db json-refresh
+llmbridge --sqlite ./llmbridge.db json-refresh
 ```
 
 ## Configuration

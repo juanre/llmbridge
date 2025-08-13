@@ -351,6 +351,43 @@ async def cmd_status(args):
         print(f"  Models: {backup['model_count']}")
 
 
+async def cmd_init_db(args):
+    """Initialize database schema and seed default models.
+
+    - SQLite: creates tables and inserts default models.
+    - Postgres: applies migrations (schema creation and seed models).
+    """
+    sqlite_mode, db_path = _is_sqlite_mode(args)
+    if sqlite_mode:
+        db = SQLiteDatabase(db_path)
+        await db.initialize()
+        await db.close()
+        print(f"✓ Initialized SQLite database at {db_path}")
+        return
+
+    # Postgres path
+    # Use DATABASE_URL if provided; otherwise use ModelRefreshConfig pieces
+    from llmbridge.db import LLMDatabase
+    from llmbridge.config import ModelRefreshConfig
+
+    dsn = os.getenv("DATABASE_URL")
+    if not dsn:
+        cfg = ModelRefreshConfig.from_environment()
+        params = cfg.get_database_connection_params()
+        host = params["host"]
+        port = params["port"]
+        database = params["database"]
+        user = params["user"]
+        password = params["password"]
+        dsn = f"postgresql://{user}:{password}@{host}:{port}/{database}"
+
+    db = LLMDatabase(connection_string=dsn, schema="llmbridge")
+    await db.initialize()
+    await db.apply_migrations()
+    await db.close()
+    print("✓ Initialized PostgreSQL database and applied migrations (seeded models)")
+
+
 async def cmd_refresh(args):
     """Refresh models from providers."""
     sqlite_mode, _ = _is_sqlite_mode(args)
@@ -1615,6 +1652,7 @@ def main():
         "search": cmd_search_models,
         "info": cmd_model_info,
         "status": cmd_status,
+        "init-db": cmd_init_db,
         "suggest": cmd_suggest_models,
         "extract-from-pdfs": cmd_extract_from_pdfs,
         "refresh": cmd_refresh,

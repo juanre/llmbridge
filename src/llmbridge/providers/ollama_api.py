@@ -148,15 +148,25 @@ class OllamaProvider(BaseLLMProvider):
             # Use the Ollama SDK to list models
             response = await self.client.list()
 
-            # Extract model names from the response
+            # Normalize to dict access
+            if isinstance(response, dict):
+                raw_models = response.get("models", [])
+                models = []
+                for m in raw_models:
+                    name = m.get("name") or m.get("model")
+                    if name:
+                        models.append(name)
+                return models
+
+            # Fallback: object with attribute access
             models = []
             if hasattr(response, "models"):
                 for model in response.models:
-                    # Get the model name (model is a Model object with 'model' attribute)
-                    model_name = getattr(model, "model", "")
+                    model_name = getattr(model, "name", None) or getattr(
+                        model, "model", ""
+                    )
                     if model_name:
                         models.append(model_name)
-
             return models
         except Exception:
             # If we can't get the list, return our supported models list

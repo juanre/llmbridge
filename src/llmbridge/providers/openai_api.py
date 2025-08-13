@@ -44,10 +44,6 @@ class OpenAIProvider(BaseLLMProvider):
             raise ValueError("OpenAI API key must be provided")
 
         # Initialize the client with the SDK
-        client_kwargs = {"api_key": self.api_key}
-        if base_url:
-            client_kwargs["base_url"] = base_url
-
         self.client = AsyncOpenAI(api_key=self.api_key, base_url=base_url)
 
         # List of officially supported models (as of early 2025)
@@ -342,6 +338,84 @@ class OpenAIProvider(BaseLLMProvider):
             # Fallback to rough estimate: ~4 characters per token for English text
             return len(text) // 4
 
+    async def _chat_via_responses(
+        self,
+        messages: List[Message],
+        model: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> LLMResponse:
+        """
+        Handle o1* models using the Responses API.
+        """
+        # Flatten conversation into an input string preserving roles
+        parts: List[str] = []
+        for msg in messages:
+            role = msg.role
+            content_str = ""
+            if isinstance(msg.content, str):
+                content_str = msg.content
+            elif isinstance(msg.content, list):
+                # Join text parts; ignore non-text for o1
+                text_bits: List[str] = []
+                for item in msg.content:
+                    if isinstance(item, str):
+                        text_bits.append(item)
+                    elif isinstance(item, dict) and item.get("type") == "text":
+                        text_bits.append(item.get("text", ""))
+                content_str = " ".join(text_bits)
+            else:
+                content_str = str(msg.content)
+            parts.append(f"{role}: {content_str}")
+
+        input_text = "\n".join(parts)
+
+        try:
+            resp = await self.client.responses.create(
+                model=model,
+                input=input_text,
+                # temperature and max tokens support may vary; pass only if provided
+                **({"temperature": temperature} if temperature is not None else {}),
+                **({"max_output_tokens": max_tokens} if max_tokens is not None else {}),
+            )
+        except Exception as e:
+            error_msg = str(e)
+            if "API key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                raise ValueError(
+                    f"OpenAI API authentication failed: {error_msg}"
+                ) from e
+            elif "rate limit" in error_msg.lower() or "quota" in error_msg.lower():
+                raise ValueError(f"OpenAI API rate limit exceeded: {error_msg}") from e
+            elif "model" in error_msg.lower() and (
+                "not found" in error_msg.lower() or "does not exist" in error_msg.lower()
+            ):
+                raise ValueError(f"OpenAI model not available: {error_msg}") from e
+            else:
+                raise Exception(f"OpenAI API error: {error_msg}") from e
+
+        # Try to get plain text; fallback to stringified output
+        content_text: str
+        if hasattr(resp, "output_text") and resp.output_text is not None:
+            content_text = resp.output_text
+        else:
+            try:
+                content_text = str(resp)
+            except Exception:
+                content_text = ""
+
+        estimated_usage = {
+            "prompt_tokens": self.get_token_count(input_text),
+            "completion_tokens": self.get_token_count(content_text),
+            "total_tokens": self.get_token_count(input_text) + self.get_token_count(content_text),
+        }
+
+        return LLMResponse(
+            content=content_text,
+            model=model,
+            usage=estimated_usage,
+            finish_reason="stop",
+        )
+
     async def chat(
         self,
         messages: List[Message],
@@ -376,6 +450,17 @@ class OpenAIProvider(BaseLLMProvider):
         # Verify model is supported
         if not self.validate_model(model):
             raise ValueError(f"Unsupported model: {model}")
+
+        # Route o1* models via Responses API
+        if model.startswith("o1"):
+            if tools or response_format or tool_choice is not None:
+                raise ValueError("OpenAI o1 models do not support tools or custom response formats")
+            return await self._chat_via_responses(
+                messages=messages,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
         # Check if messages contain PDF content - if so, route to Assistants API
         if self._contains_pdf_content(messages):

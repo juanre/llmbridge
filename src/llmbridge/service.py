@@ -467,109 +467,16 @@ class LLMBridge:
             raise
 
     async def get_usage_hints(self, use_case: str) -> List[Dict[str, Any]]:
-        """Get model recommendations for a specific use case.
-
-        Args:
-            use_case: Use case identifier (e.g., 'deepest_model', 'largest_context',
-                     'largest_output', 'best_vision', 'cheapest_good')
-
-        Returns:
-            List of recommended models with their details and reasoning, one per provider
-        """
-        if not self.db:
-            logger.warning("Database not configured, cannot fetch usage hints")
-            return []
-
-        try:
-            logger.info(f"Fetching usage hints for use case: {use_case}")
-            await self._ensure_db_initialized()
-
-            query = self.db.db._prepare_query(
-                """
-                SELECT * FROM {{schema}}.get_usage_hints_for_use_case($1)
-                """
-            )
-
-            results = await self.db.db.fetch_all(query, use_case)
-            hints = []
-
-            for row in results:
-                hints.append(
-                    {
-                        "provider": row["provider"],
-                        "model_name": row["model_name"],
-                        "display_name": row["display_name"],
-                        "description": row["description"],
-                        "reasoning": row["reasoning"],
-                        "max_context": row["max_context"],
-                        "max_output_tokens": row["max_output_tokens"],
-                        "cost_per_million_tokens_input": (
-                            float(row["dollars_per_million_tokens_input"])
-                            if row["dollars_per_million_tokens_input"]
-                            else None
-                        ),
-                        "cost_per_million_tokens_output": (
-                            float(row["dollars_per_million_tokens_output"])
-                            if row["dollars_per_million_tokens_output"]
-                            else None
-                        ),
-                    }
-                )
-
-            logger.info(f"Found {len(hints)} usage hints for {use_case}")
-            return hints
-
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch usage hints for {use_case}: {e}", exc_info=True
-            )
-            return []
+        """Deprecated. Use application-side heuristics on model metadata instead."""
+        raise NotImplementedError("Usage hints are no longer provided by the service")
 
     async def get_provider_usage_hints(
         self, provider: str
     ) -> Dict[str, Dict[str, Any]]:
-        """Get all usage hints for a specific provider.
-
-        Args:
-            provider: Provider name (e.g., 'openai', 'anthropic', 'google')
-
-        Returns:
-            Dictionary mapping use cases to model recommendations
-        """
-        if not self.db:
-            logger.warning("Database not configured, cannot fetch provider usage hints")
-            return {}
-
-        try:
-            logger.info(f"Fetching usage hints for provider: {provider}")
-            await self._ensure_db_initialized()
-
-            query = self.db.db._prepare_query(
-                """
-                SELECT * FROM {{schema}}.get_provider_usage_hints($1)
-                """
-            )
-
-            results = await self.db.db.fetch_all(query, provider)
-            hints = {}
-
-            for row in results:
-                use_case = row["use_case"]
-                hints[use_case] = {
-                    "model_name": row["model_name"],
-                    "display_name": row["display_name"],
-                    "reasoning": row["reasoning"],
-                }
-
-            logger.info(f"Found usage hints for {len(hints)} use cases for {provider}")
-            return hints
-
-        except Exception as e:
-            logger.error(
-                f"Failed to fetch provider usage hints for {provider}: {e}",
-                exc_info=True,
-            )
-            return {}
+        """Deprecated. Use application-side heuristics on model metadata instead."""
+        raise NotImplementedError(
+            "Provider usage hints are no longer provided by the service"
+        )
 
     async def close(self):
         """Close database connections."""

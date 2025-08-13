@@ -42,6 +42,7 @@ dependencies = [
     "psycopg2-binary>=2.9.0",
     "beautifulsoup4>=4.12.0",
     "aiosqlite>=0.19.0",
+    "pgdbm>=0.1.0",
 ]
 
 [project.urls]
@@ -53,7 +54,7 @@ Issues = "https://github.com/juanreyero/llmbridge/issues"
 # (removed duplicate [project] header)
 
 [project.scripts]
-llm-models = "llmbridge.cli:main"
+llmbridge = "llmbridge.cli:main"
 
 [project.optional-dependencies]
 postgres = [

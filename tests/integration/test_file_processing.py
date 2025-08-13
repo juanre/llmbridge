@@ -343,12 +343,8 @@ class TestFileProcessing:
                 term in error_str
                 for term in ["billing", "quota", "usage limit", "rate limit"]
             ):
-                import pytest
-
                 pytest.skip(f"OpenAI API limit reached: {e}")
             elif "assistants" in error_str:
-                import pytest
-
                 pytest.skip(f"Assistants API not available: {e}")
             else:
                 raise

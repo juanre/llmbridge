@@ -177,23 +177,30 @@ class LLMBridgeSQLite:
         logger.info(f"Routing request to {provider_name} with model {model_name}")
 
         try:
-            # Call the provider
-            response = await provider.chat(
-                messages=request.messages,
-                model=model_name,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                tools=request.tools,
-                tool_choice=request.tool_choice,
-                response_format=request.response_format,
-                json_response=request.json_response,
-            )
+            # Call the provider with only non-None, supported kwargs
+            kwargs = {
+                "messages": request.messages,
+                "model": model_name,
+            }
+            if request.temperature is not None:
+                kwargs["temperature"] = request.temperature
+            if request.max_tokens is not None:
+                kwargs["max_tokens"] = request.max_tokens
+            if request.tools is not None:
+                kwargs["tools"] = request.tools
+            if request.tool_choice is not None:
+                kwargs["tool_choice"] = request.tool_choice
+            if request.response_format is not None:
+                kwargs["response_format"] = request.response_format
+
+            response = await provider.chat(**kwargs)
 
             # Log to database if enabled
             if self.enable_db_logging and self.db:
                 try:
                     from decimal import Decimal
                     from uuid import uuid4
+                    from datetime import datetime, timezone
                     from llmbridge.schemas import CallRecord
 
                     # Get model info for cost calculation
@@ -222,6 +229,7 @@ class LLMBridgeSQLite:
                         estimated_cost=cost,
                         dollars_per_million_tokens_input_used=model_info.dollars_per_million_tokens_input if model_info else None,
                         dollars_per_million_tokens_output_used=model_info.dollars_per_million_tokens_output if model_info else None,
+                        called_at=datetime.now(timezone.utc),
                     )
                     await self.db.record_api_call(record)
                 except Exception as e:

@@ -48,9 +48,9 @@ def test_cli_sqlite_json_refresh_and_list(temp_models_dir):
         db_path = f.name
 
     try:
-        # Monkeypatch argv to simulate: llm-models --sqlite db json-refresh --models-dir <dir>
+        # Monkeypatch argv to simulate: llmbridge --sqlite db json-refresh --models-dir <dir>
         sys.argv = [
-            "llm-models",
+            "llmbridge",
             "--sqlite",
             db_path,
             "json-refresh",
@@ -62,7 +62,7 @@ def test_cli_sqlite_json_refresh_and_list(temp_models_dir):
 
         # Now list
         sys.argv = [
-            "llm-models",
+            "llmbridge",
             "--sqlite",
             db_path,
             "list",

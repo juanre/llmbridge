@@ -491,9 +491,9 @@ class LLMDatabase:
         # Calculate total tokens
         total_tokens = prompt_tokens + completion_tokens
 
-        # Get model cost information
+        # Get model cost information, guarding for None values
         model = await self.get_model(provider, model_name)
-        if model:
+        if model and model.dollars_per_million_tokens_input is not None and model.dollars_per_million_tokens_output is not None:
             estimated_cost = float(
                 (
                     prompt_tokens * model.dollars_per_million_tokens_input
