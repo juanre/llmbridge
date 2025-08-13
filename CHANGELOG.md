@@ -21,10 +21,10 @@ Fixes:
 Docs:
 - Updated README and docs/API.md for new CLI name, init-db, initialization patterns (managed vs injected pgdbm), pgcrypto note, and OpenAI o1/Responses behavior.
 
-## [0.2.1] - 2025-08-13
+## [0.2.2] - 2025-08-13
 
 Breaking:
-- Distribution renamed on PyPI to `llm-bridge` (was `llmbridge`) due to PyPI name similarity rules. Imports and CLI remain `llmbridge`.
+- Distribution renamed on PyPI to `llmbridge-py` (was `llm-bridge` / previously attempted `llmbridge`) due to PyPI name policy. Imports and CLI remain `llmbridge`.
 
 Also includes the 0.2.0 changes:
 - CLI renamed to `llmbridge` (was `llm-models`)

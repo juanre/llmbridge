@@ -14,10 +14,10 @@ Unified Python service to call multiple LLM providers (OpenAI, Anthropic, Google
 
 ```bash
 # Basic installation (SQLite support only)
-uv add llm-bridge
+uv add llmbridge-py
 
 # With PostgreSQL support  
-uv add "llm-bridge[postgres]"
+uv add "llmbridge-py[postgres]"
 
 # Development installation (includes examples dependencies)
 uv add --dev llmbridge
