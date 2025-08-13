@@ -20,7 +20,7 @@ uv add llmbridge-py
 uv add "llmbridge-py[postgres]"
 
 # Development installation (includes examples dependencies)
-uv add --dev llmbridge
+uv add --dev llmbridge-py
 # Or from source:
 uv pip install -e ".[dev]"
 ```
