@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+Breaking changes:
+- CLI renamed from `llm-models` to `llmbridge`. Update your scripts/automation accordingly.
+- OpenAI PDF handling unified: we continue to support PDF analysis via the OpenAI Assistants API pathway, but the internal API changed and deprecation warnings are suppressed. PDF path still does not allow tools or custom response_format.
+
+Features:
+- Added `llmbridge init-db` command to initialize the database schema and seed curated models for both PostgreSQL (via `DATABASE_URL`) and SQLite (`--sqlite path`).
+- OpenAI o1/o1-mini routed via Responses API (no tools or response_format).
+
+Fixes:
+- Do not pass unsupported kwargs from SQLite service to providers; only non-None supported parameters are sent. Also ensure `called_at` is provided when logging calls.
+- Ollama model listing uses SDK’s dict response shape consistently.
+- PostgreSQL migrations now use `pgcrypto` and `gen_random_uuid()` for UUIDs.
+- Guarded None pricing in Postgres cost calculation.
+- Removed deprecated usage-hints service methods relying on private db internals.
+- For OpenAI Chat Completions vision, remote image URLs are left intact in request content and only inlined to data URLs at send-time, preserving original content for tests and callers.
+
+Docs:
+- Updated README and docs/API.md for new CLI name, init-db, initialization patterns (managed vs injected pgdbm), pgcrypto note, and OpenAI o1/Responses behavior.
+
+# Changelog
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
