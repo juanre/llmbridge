@@ -46,8 +46,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/juanre/llmbridge"
-Documentation = "https://github.com/juanre/llmbridge#readme"
+Homepage = "https://juanreyero.com/open/llmbridge/"
+Documentation = "https://github.com/juanre/llmbridge"
 Repository = "https://github.com/juanre/llmbridge"
 Issues = "https://github.com/juanre/llmbridge/issues"
 
