@@ -138,9 +138,18 @@ stats = await service.get_usage_stats(id_at_origin="user-123", days=30)
 
 ## CLI (optional)
 
-`llmbridge` manages the registry. Typical flows:
+`llmbridge` manages initialization and the model registry.
 
 ```bash
+# Initialize database schema and seed default models
+
+# PostgreSQL (use DATABASE_URL)
+export DATABASE_URL=postgresql://user:pass@localhost/dbname
+llmbridge init-db
+
+# SQLite
+llmbridge --sqlite ./llmbridge.db init-db
+
 # Load curated JSONs (PostgreSQL or SQLite)
 llmbridge json-refresh
 
@@ -203,12 +212,39 @@ request = LLMRequest(
 response = await service.chat(request)
 ```
 
+Notes:
+- When sending messages that include PDF documents with OpenAI models, the service automatically routes to the Assistants API for analysis. Tools and custom response formats are not supported in this PDF path.
+- OpenAI reasoning models (`o1`, `o1-mini`) are routed via the Responses API. These do not support tools or custom response formats; attempting to use them will raise a validation error.
+
 ## Reference (minimal)
 
 - `LLMBridge` (service) → `await service.chat(LLMRequest(...))`
 - `LLMRequest` fields: `messages`, `model`, optional `temperature`, `max_tokens`, `tools`, `response_format`, `cache={enabled: bool, ttl_seconds: int}`
 - Provider string: `"provider:model"` or just `"model"` (auto-detected)
 - Optional DB helpers: `await service.get_models_from_db()`, `await service.get_usage_stats(id_at_origin, days)`
+
+## Initialization patterns
+
+There are two production modes for database usage:
+
+- Managed by llmbridge (recommended default)
+  - PostgreSQL: `service = LLMBridge(db_connection_string=os.environ["DATABASE_URL"])`. The service initializes the connection, applies migrations (creates schema/tables/functions), and seeds curated models on first use.
+  - SQLite (local/dev): `service = LLMBridgeSQLite(db_path="llmbridge.db")`. Tables are created and default models inserted automatically on initialization.
+
+- Managed by host app (pgdbm)
+  - Create an `AsyncDatabaseManager` in your application and pass it in. llmbridge will apply migrations and seed models within the provided schema but will not own the pool.
+
+```python
+from pgdbm import AsyncDatabaseManager
+from llmbridge.service import LLMBridge
+
+# Example: use an externally created manager (pool & config omitted here)
+db_manager = AsyncDatabaseManager(..., schema="llmbridge")
+service = LLMBridge(db_manager=db_manager, origin="myapp")
+# On first use, llmbridge will initialize and migrate the llmbridge schema
+```
+
+PostgreSQL migrations require the `pgcrypto` extension; the migrations enable it if missing and use `gen_random_uuid()` for primary keys.
 
 ## Development
 

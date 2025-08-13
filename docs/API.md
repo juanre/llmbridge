@@ -8,7 +8,7 @@ Main service class for routing requests to LLM providers.
 ```python
 service = LLMBridge(
     db_connection_string: Optional[str] = None,  # Database connection
-    db_manager: Optional[AsyncDatabaseManager] = None,  # External DB manager
+    db_manager: Optional[AsyncDatabaseManager] = None,  # External DB manager (pgdbm)
     origin: str = "llmbridge",                   # App identifier for tracking
     enable_db_logging: bool = True               # Enable database logging
 )
@@ -36,10 +36,9 @@ from pgdbm import AsyncDatabaseManager
 db = LLMDatabase(connection_string="postgresql://...")
 await db.initialize()  # runs single initial migration in configured schema (or public)
 
-# Shared pool (injected manager with schema)
-pool = await AsyncDatabaseManager.create_shared_pool(config)
-db_manager = AsyncDatabaseManager(pool=pool, schema="llmbridge")
-db = LLMDatabase(db_manager=db_manager)
+# Shared manager (injected) with schema (pool creation omitted)
+db_manager = AsyncDatabaseManager(..., schema="llmbridge")
+db = LLMDatabase(db_manager=db_manager)  # llmbridge won't own the pool
 await db.initialize()
 
 # Methods
@@ -166,3 +165,24 @@ request = LLMRequest(
 # - SQLite/PostgreSQL: If DB logging is enabled, uses database cache
 # - In-memory: If no DB, uses in-memory cache (not persistent)
 ```
+
+## CLI
+
+The `llmbridge` CLI can initialize databases and manage the model registry.
+
+```bash
+# PostgreSQL: initialize schema and seed default models
+export DATABASE_URL=postgresql://user:pass@localhost/dbname
+llmbridge init-db
+
+# SQLite: initialize schema and seed default models
+llmbridge --sqlite ./llmbridge.db init-db
+
+# Load curated JSONs into the database
+llmbridge json-refresh
+llmbridge --sqlite ./llmbridge.db json-refresh
+```
+
+Notes:
+- Postgres migrations require `pgcrypto` for UUIDs. The migration enables it if missing and uses `gen_random_uuid()`.
+- OpenAI `o1*` models are routed via the Responses API and do not support tools or custom response formats.

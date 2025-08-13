@@ -149,7 +149,7 @@ class OpenAIProvider(BaseLLMProvider):
         combined_text = " ".join(text_parts)
         return pdf_data_list, combined_text
 
-    async def _process_with_assistants_api(
+    async def _process_with_responses_file_search(
         self,
         messages: List[Message],
         model: str,
@@ -157,16 +157,7 @@ class OpenAIProvider(BaseLLMProvider):
         max_tokens: Optional[int] = None,
     ) -> LLMResponse:
         """
-        Process messages containing PDFs using OpenAI's Assistants API.
-
-        Args:
-            messages: List of messages (should contain PDF content)
-            model: Model to use
-            temperature: Optional temperature parameter
-            max_tokens: Optional max tokens parameter
-
-        Returns:
-            LLM response with PDF analysis
+        Process messages containing PDFs using OpenAI's Responses API with file_search attachments.
         """
         # Extract PDF data and text from messages
         pdf_data_list, combined_text = self._extract_pdf_content_and_text(messages)
@@ -174,149 +165,64 @@ class OpenAIProvider(BaseLLMProvider):
         if not pdf_data_list:
             raise ValueError("No PDF content found in messages")
 
-        # Default prompt if no text provided
         if not combined_text.strip():
             combined_text = "Please analyze this PDF document and provide a summary."
 
-        uploaded_files = []
-        assistant_id = None
-        thread_id = None
-
+        uploaded_files: List[Dict[str, str]] = []
         try:
-            # Upload PDF files
+            # Upload PDFs and collect file_ids
             for i, pdf_data in enumerate(pdf_data_list):
-                with tempfile.NamedTemporaryFile(
-                    suffix=f"_document_{i}.pdf", delete=False
-                ) as tmp_file:
+                with tempfile.NamedTemporaryFile(suffix=f"_document_{i}.pdf", delete=False) as tmp_file:
                     tmp_file.write(pdf_data)
                     tmp_file.flush()
-
-                    # Upload the file to OpenAI
                     with open(tmp_file.name, "rb") as f:
-                        file_obj = await self.client.files.create(
-                            file=f, purpose="assistants"
-                        )
-                        uploaded_files.append(
-                            {"file_id": file_obj.id, "temp_path": tmp_file.name}
-                        )
+                        file_obj = await self.client.files.create(file=f, purpose="assistants")
+                        uploaded_files.append({"file_id": file_obj.id, "temp_path": tmp_file.name})
 
-            # Create assistant with file search capability
-            assistant = await self.client.beta.assistants.create(
-                name="PDF Document Processor",
-                instructions="You are a helpful assistant that can analyze PDF documents. Provide detailed analysis of the documents and answer any questions about their content.",
-                model=model,
-                tools=[{"type": "file_search"}],
-            )
-            assistant_id = assistant.id
-
-            # Create a thread
-            thread = await self.client.beta.threads.create()
-            thread_id = thread.id
-
-            # Create message with file attachments
-            from openai.types.beta.threads.message_create_params import Attachment
-
+            # Build attachments for file_search
             attachments = [
-                Attachment(
-                    file_id=file_info["file_id"], tools=[{"type": "file_search"}]
-                )
-                for file_info in uploaded_files
+                {"file_id": info["file_id"], "tools": [{"type": "file_search"}]}
+                for info in uploaded_files
             ]
 
-            await self.client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=combined_text,
+            # Create the response against the PDFs
+            resp = await self.client.responses.create(
+                model=model,
+                input=combined_text,
                 attachments=attachments,
+                **({"temperature": temperature} if temperature is not None else {}),
+                **({"max_output_tokens": max_tokens} if max_tokens is not None else {}),
             )
 
-            # Run the assistant
-            run = await self.client.beta.threads.runs.create(
-                thread_id=thread_id,
-                assistant_id=assistant_id,
-                instructions=f"Temperature: {temperature or 0.7}. Max response length: {max_tokens or 4096} tokens.",
-            )
+            response_content = resp.output_text if hasattr(resp, "output_text") else str(resp)
 
-            # Wait for completion
-            while True:
-                run_status = await self.client.beta.threads.runs.retrieve(
-                    thread_id=thread_id, run_id=run.id
-                )
-
-                if run_status.status == "completed":
-                    break
-                elif run_status.status in ["failed", "cancelled", "expired"]:
-                    error_msg = getattr(run_status, "last_error", {}).get(
-                        "message", "Unknown error"
-                    )
-                    raise Exception(
-                        f"Assistant run failed with status {run_status.status}: {error_msg}"
-                    )
-
-                # Wait before polling again
-                await asyncio.sleep(1)
-
-            # Get the messages from the thread
-            messages_response = await self.client.beta.threads.messages.list(
-                thread_id=thread_id, order="desc", limit=1
-            )
-
-            if not messages_response.data:
-                raise Exception("No response from assistant")
-
-            # Extract the assistant's response
-            assistant_message = messages_response.data[0]
-            response_content = ""
-
-            for content_block in assistant_message.content:
-                # Handle different content block types from the Assistants API
-                if hasattr(content_block, "type") and content_block.type == "text":
-                    if hasattr(content_block, "text") and hasattr(
-                        content_block.text, "value"
-                    ):
-                        response_content += content_block.text.value
-
-            # Create usage estimate (Assistants API doesn't provide exact token counts)
             estimated_usage = {
-                "prompt_tokens": len(combined_text) // 4,  # Rough estimate
-                "completion_tokens": len(response_content) // 4,  # Rough estimate
-                "total_tokens": (len(combined_text) + len(response_content)) // 4,
+                "prompt_tokens": self.get_token_count(combined_text),
+                "completion_tokens": self.get_token_count(response_content or ""),
+                "total_tokens": self.get_token_count(combined_text)
+                + self.get_token_count(response_content or ""),
             }
 
             return LLMResponse(
-                content=response_content,
+                content=response_content or "",
                 model=model,
                 usage=estimated_usage,
                 finish_reason="stop",
             )
-
         finally:
-            # Cleanup: delete uploaded files, assistant, and thread
-            cleanup_tasks = []
-
-            # Delete uploaded files
-            for file_info in uploaded_files:
-                cleanup_tasks.append(self.client.files.delete(file_info["file_id"]))
-                # Remove temporary file
+            # Cleanup uploaded files locally and in OpenAI
+            tasks = []
+            for info in uploaded_files:
+                tasks.append(self.client.files.delete(info["file_id"]))
                 try:
-                    os.unlink(file_info["temp_path"])
+                    os.unlink(info["temp_path"])
                 except OSError:
-                    pass  # File might already be deleted
-
-            # Delete assistant
-            if assistant_id:
-                cleanup_tasks.append(self.client.beta.assistants.delete(assistant_id))
-
-            # Delete thread
-            if thread_id:
-                cleanup_tasks.append(self.client.beta.threads.delete(thread_id))
-
-            # Execute cleanup agents
-            if cleanup_tasks:
+                    pass
+            if tasks:
                 try:
-                    await asyncio.gather(*cleanup_tasks, return_exceptions=True)
+                    await asyncio.gather(*tasks, return_exceptions=True)
                 except Exception:
-                    pass  # Don't fail if cleanup fails
+                    pass
 
     def get_token_count(self, text: str) -> int:
         """
@@ -464,13 +370,13 @@ class OpenAIProvider(BaseLLMProvider):
 
         # Check if messages contain PDF content - if so, route to Assistants API
         if self._contains_pdf_content(messages):
-            # Tools and response_format are not supported with Assistants API
+            # Tools and response_format are not supported in the PDF path (Responses + file_search)
             if tools or response_format:
                 raise ValueError(
-                    "Tools and custom response formats are not supported when processing PDFs with OpenAI. The Assistants API will be used for PDF processing."
+                    "Tools and custom response formats are not supported when processing PDFs with OpenAI (Responses API with file_search)."
                 )
 
-            return await self._process_with_assistants_api(
+            return await self._process_with_responses_file_search(
                 messages=messages,
                 model=model,
                 temperature=temperature,
