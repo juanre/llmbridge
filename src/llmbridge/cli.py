@@ -1511,6 +1511,11 @@ def main():
     # Status command
     status_parser = subparsers.add_parser("status", help="Show system status")
 
+    # Init DB command
+    init_db_parser = subparsers.add_parser(
+        "init-db", help="Initialize database schema and seed default models"
+    )
+
     # Suggest command
     suggest_parser = subparsers.add_parser(
         "suggest", help="Suggest models for use cases"

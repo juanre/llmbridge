@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "llmbridge"
-version = "0.1.0"
+version = "0.2.0"
 description = "Unified Python interface for OpenAI, Anthropic, Google, and Ollama LLMs with optional model registry and usage tracking"
 readme = "README.md"
 license = { text = "MIT" }
@@ -46,10 +46,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/juanreyero/llmbridge"
-Documentation = "https://github.com/juanreyero/llmbridge#readme"
-Repository = "https://github.com/juanreyero/llmbridge"
-Issues = "https://github.com/juanreyero/llmbridge/issues"
+Homepage = "https://github.com/juanre/llmbridge"
+Documentation = "https://github.com/juanre/llmbridge#readme"
+Repository = "https://github.com/juanre/llmbridge"
+Issues = "https://github.com/juanre/llmbridge/issues"
 
 # (removed duplicate [project] header)
 
