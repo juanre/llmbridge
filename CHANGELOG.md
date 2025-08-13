@@ -21,6 +21,18 @@ Fixes:
 Docs:
 - Updated README and docs/API.md for new CLI name, init-db, initialization patterns (managed vs injected pgdbm), pgcrypto note, and OpenAI o1/Responses behavior.
 
+## [0.2.1] - 2025-08-13
+
+Breaking:
+- Distribution renamed on PyPI to `llm-bridge` (was `llmbridge`) due to PyPI name similarity rules. Imports and CLI remain `llmbridge`.
+
+Also includes the 0.2.0 changes:
+- CLI renamed to `llmbridge` (was `llm-models`)
+- Added `init-db` command (SQLite & PostgreSQL)
+- OpenAI PDFs stable via Assistants (deprecation warnings suppressed)
+- OpenAI `o1*` via Responses API (no tools/response_format)
+- PostgreSQL migrations use `pgcrypto` (`gen_random_uuid()`)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
