@@ -1,5 +1,15 @@
 # LLMBridge
 
+> **⚠️ This project has been superseded by [llmring](https://github.com/juanre/llmring)**
+> 
+> **llmring** provides a cleaner architecture without database dependencies, using alias-based routing with lockfiles and a registry-driven approach.
+> 
+> - **Documentation**: [llmring.ai](https://llmring.ai)
+> - **GitHub**: [github.com/juanre/llmring](https://github.com/juanre/llmring)
+> - **PyPI**: [pypi.org/project/llmring](https://pypi.org/project/llmring)
+
+---
+
 Unified Python service to call multiple LLM providers (OpenAI, Anthropic, Google, Ollama) with one API. Optional DB logging and model registry. Built-in response caching.
 
 ## Highlights
